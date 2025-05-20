@@ -54,19 +54,7 @@ A conversational AI system featuring multiple specialized agents with real-time 
 ### For Your Follow-Up Questions:
 
 
-```markdown
-## Optional Additions
 
-### Deployment Options
-<details>
-<summary><strong>Docker Setup</strong></summary>
-
-```dockerfile
-FROM python:3.9
-WORKDIR /app
-COPY . .
-RUN pip install -r requirements.txt
-CMD ["chainlit", "run", "app.py", "--port", "8000"]
 
 
 
