@@ -1,4 +1,3 @@
-```markdown
 # Multi-Agent Chat System
 
 <div align="center">
@@ -35,17 +34,6 @@ A sophisticated multi-agent chat system developed by **Muhammad Zuhair Zeb** tha
    ```bash
    git clone https://github.com/your-repo/multi-agent-chat.git
    cd multi-agent-chat
-   ```
-2. Create virtual environment:
-   ```bash
-   python -m venv venv
-   # Windows: venv\Scripts\activate
-   # Unix/Mac: source venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
 
 ## ⚙ Configuration
 Create `.env` file with:
