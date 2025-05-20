@@ -1,0 +1,6 @@
+chainlit
+langchain
+langchain-google-genai
+langchain-groq
+python-dotenv
+pydantic
