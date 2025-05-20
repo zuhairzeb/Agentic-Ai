@@ -52,7 +52,7 @@ A conversational AI system featuring multiple specialized agents with real-time 
 ---
 
 ### For Your Follow-Up Questions:
-Add these sections **at the end** of the README:
+
 
 ```markdown
 ## Optional Additions
