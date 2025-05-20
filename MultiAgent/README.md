@@ -1,4 +1,3 @@
-Here's a comprehensive `README.md` in a unified format that works well in VS Code and other platforms:
 
 ```markdown
 # Multi-Agent Chat System
@@ -91,7 +90,7 @@ multi-agent-chat/
 
 ## 📞 Support
 For assistance, contact:
-- ✉ Email: [your-email@example.com]
+- ✉ Email: [zuhairzeb@yahoo.com]
 - 💬 Issues: [GitHub Issues]
 
 ---
