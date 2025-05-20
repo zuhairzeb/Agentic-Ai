@@ -77,8 +77,8 @@ multi-agent-chat/
 
 ## 📞 Support
 For assistance, contact:
-- ✉ Email: [zuhairzeb@yahoo.com]
-- 💬 Issues: [GitHub Issues]
+- ✉ Email: zuhairzeb@yahoo.com
+- 💬 Issues: GitHub Issues
 
 
 
