@@ -70,20 +70,27 @@ CMD ["chainlit", "run", "app.py", "--port", "8000"]
 
 
 
-### Why This Placement Works Best:
-1. **Logical Flow**:  
-   - Highlights appear right after features to emphasize value  
-   - Optional sections at the end avoid cluttering core docs  
+## Documentation Strategy
 
-2. **Visual Balance**:  
-   - Badges/Markdown tables break up text walls  
-   - Collapsible Docker instructions (using `<details>`) keep it tidy  
+### Why This Structure Works Best
 
-3. **Actionable**:  
-   - The agent matrix gives immediate usage examples  
-   - Streaming test case is directly suggested  
+**1. Logical Flow**  
+- Highlights appear immediately after core features to emphasize value  
+- Optional sections are placed at the end to avoid cluttering essential documentation  
 
-Would you like me to:  
-- Provide actual screenshot examples?  
-- Expand the Docker setup further?  
-- Add a troubleshooting section?
+**2. Visual Balance**  
+- Badges and markdown tables create visual breaks in text walls  
+- Collapsible sections (like Docker instructions) maintain tidiness  
+
+**3. Actionable Content**  
+- The agent matrix provides immediate usage examples  
+- Includes direct suggestions for testing streaming functionality  
+
+---
+
+### Potential Enhancements
+
+Let me know if you'd like me to add:  
+- Real screenshot examples of the chat interface  
+- More detailed Docker/Compose configurations  
+- A troubleshooting guide for common issues  
