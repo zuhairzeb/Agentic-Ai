@@ -80,12 +80,11 @@ For assistance, contact:
 - ✉ Email: [zuhairzeb@yahoo.com]
 - 💬 Issues: [GitHub Issues]
 
----
+
 
 <div align="center">
   <sub>Built with ❤️ by Muhammad Zuhair Zeb | VS Code Optimized</sub>
 </div>
-```
 
 ### Key Features:
 1. **Consistent Formatting**: Uniform headers and sections
