@@ -1,4 +1,5 @@
 import os
+import asyncio
 from dotenv import load_dotenv
 import chainlit as cl
 from pydantic import SecretStr
@@ -49,13 +50,21 @@ async def on_message(message: cl.Message):
         await cl.Message(content=welcome_msg).send()
         return
 
-    # Handle normal input
+    # Route conversation
     conversation = route_message_to_agent(message.content)
-    msg = cl.Message(content="")
-    await msg.send()
 
-    # Streaming the LLM response
-    async for chunk in conversation.astream({"input": message.content}):
-        if "response" in chunk:
-            await msg.stream_token(chunk["response"])
-    await msg.update()
+    # Get full response (no streaming support assumed here)
+    response = await conversation.acall({"input": message.content})
+    full_text = response["response"]
+
+    # Send empty message to start streaming
+    bot_msg = await cl.Message(content="").send()
+
+    # Stream response in chunks to simulate typing
+    chunk_size = 10  # chars per chunk
+    for i in range(0, len(full_text), chunk_size):
+        chunk = full_text[i:i+chunk_size]
+        await bot_msg.stream_token(chunk)
+        await asyncio.sleep(0.1)  # 100ms delay between chunks
+
+    await bot_msg.update()

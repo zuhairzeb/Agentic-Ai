@@ -1,60 +1,37 @@
 import os
-from memory import get_memory
+from pydantic import SecretStr
 from langchain.chains import ConversationChain
 from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import SecretStr
-import chainlit as cl  # ✅ make sure this is imported
+from langchain_groq import ChatGroq
+from memory import get_memory
 
-# Load Google API key
+# Load API keys
+groq_api_key = os.getenv("GROQ_API_KEY")
 google_api_key = os.getenv("GOOGLE_API_KEY")
-if not google_api_key:
-    raise ValueError("GOOGLE_API_KEY environment variable is not set.")
 
-# Set up the language model
-llm = ChatGoogleGenerativeAI(
-    model="gemini-pro",
-    api_key=SecretStr(google_api_key),
-    temperature=0.7
-)
+# Create LLMs
+llm_groq = ChatGroq(model="llama3-8b-8192", api_key=SecretStr(groq_api_key) if groq_api_key else None)
+llm_google = ChatGoogleGenerativeAI(model="gemini-pro", api_key=SecretStr(google_api_key) if google_api_key else None)
 
-# Set up conversation memory and agents
-math_bot = ConversationChain(
-    llm=llm,
-    memory=get_memory(),
-    verbose=True
-)
 
-writer_bot = ConversationChain(
-    llm=llm,
-    memory=get_memory(),
-    verbose=True
-)
+# Define Agents
+agents = {
+    "agent1": ConversationChain(llm=llm_groq, memory=get_memory(), verbose=True),
+    "agent2": ConversationChain(llm=llm_groq, memory=get_memory(), verbose=True),
+    "math": ConversationChain(llm=llm_google, memory=get_memory(), verbose=True),
+    "writer": ConversationChain(llm=llm_google, memory=get_memory(), verbose=True),
+}
 
-def route_message_to_agent(message: str):
+# Routing Logic
+def get_agent(message: str) -> ConversationChain:
     msg = message.lower()
-    if "math" in msg:
-        return math_bot
+    if "agent1" in msg:
+        return agents["agent1"]
+    elif "agent2" in msg:
+        return agents["agent2"]
+    elif "math" in msg:
+        return agents["math"]
     elif "write" in msg or "writer" in msg:
-        return writer_bot
+        return agents["writer"]
     else:
-        return math_bot  # fallback
-
-@cl.on_message
-async def on_message(message: cl.Message):
-    user_input = message.content.lower().strip()
-    print("Received message:", user_input)  # ✅ Debug log
-
-    # If user says hi or greetings, reply with nothing (no message sent)
-    if user_input in ["hi", "hello", "hey", "me hi"]:
-        return  # No reply at all
-
-    # Otherwise, route the message and stream the response
-    conversation = route_message_to_agent(message.content)
-    
-    msg = cl.Message(content="")
-    await msg.send()
-
-    async for chunk in conversation.astream({"input": message.content}):
-        if "response" in chunk:
-            await msg.stream_token(chunk["response"])
-    await msg.update()
+        return agents["agent1"]  # Default fallback
