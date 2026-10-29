@@ -1,0 +1,159 @@
+/* Modern, polished AI Workspace stylesheet */
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  letter-spacing: -0.011em;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Headings */
+h1 {
+  font-size: clamp(1.75rem, 3vw, 2.35rem);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.035em;
+  margin-bottom: 0.5rem;
+}
+
+h2 {
+  font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+  font-weight: 650;
+  line-height: 1.25;
+  letter-spacing: -0.025em;
+  margin-top: 1.25rem;
+  margin-bottom: 0.4rem;
+}
+
+h3 {
+  font-size: clamp(1.1rem, 1.8vw, 1.35rem);
+  font-weight: 600;
+  line-height: 1.3;
+  margin-top: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+/* Focus and selection */
+::selection {
+  background: hsl(163 65% 43% / 25%);
+}
+
+button:focus-visible, [role="button"]:focus-visible, a:focus-visible {
+  outline: 2px solid hsl(163 65% 43%);
+  outline-offset: 2px;
+}
+
+/* Custom modern scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--border) / 0.7);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+/* Pre & Code blocks */
+pre {
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.85rem;
+  background-color: hsl(var(--secondary) / 0.4);
+  padding: 1rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.05);
+}
+
+pre code {
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.88em;
+  line-height: 1.65;
+}
+
+code:not(pre code) {
+  font-family: ui-monospace, SFMono-Regular, "Cascadia Code", "Fira Code", monospace;
+  font-size: 0.88em;
+  padding: 0.15em 0.38em;
+  background-color: hsl(var(--secondary) / 0.7);
+  border-radius: 0.35rem;
+  border: 1px solid hsl(var(--border) / 0.5);
+}
+
+/* Table styling */
+table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  margin: 1rem 0;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.65rem;
+  overflow: hidden;
+}
+
+th, td {
+  padding: 0.65rem 1rem;
+  text-align: left;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+th {
+  background-color: hsl(var(--secondary) / 0.6);
+  font-weight: 600;
+  font-size: 0.88rem;
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr:nth-child(even) td {
+  background-color: hsl(var(--muted) / 0.25);
+}
+
+/* Buttons and Action Pills */
+button, [role="button"] {
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 100ms ease;
+}
+
+button:active:not(:disabled), [role="button"]:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+/* Input / Composer area */
+textarea {
+  line-height: 1.55;
+  border-radius: 0.75rem;
+}
+
+/* Message styling adjustments */
+.step-message {
+  transition: opacity 200ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
+
+@media (max-width: 640px) {
+  h1 { font-size: 1.7rem; }
+  pre { padding: 0.75rem; }
+}
