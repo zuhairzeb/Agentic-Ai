@@ -1,5 +1,5 @@
-# Welcome
+# Morrow
 
-Ask a general question or choose a specialist from the app settings. Automatic routing sends math, writing, and research requests to their specialists; ordinary questions go to the general assistant. Agent 1 and Agent 2 are also available in settings.
+Ask a question, explore a topic, or build a working page. Auto chooses a specialist for each message; you can also pick an agent in Settings.
 
-Use `/help` in the chat to see available commands and tools.
+Type `/` to browse commands. Use `/features` to see the full feature list and `/upload` to open the file picker. The paperclip button and drag-and-drop also accept TXT, Markdown, and text-based PDF files up to 10 MB.

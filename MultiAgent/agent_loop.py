@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from langchain_core.messages import ToolMessage
@@ -14,6 +14,9 @@ from tools import ToolRegistry
 VERIFIED_TOOL_MODELS = {
     "google": {"gemini-3.8-flash"},
     "groq": {"openai/gpt-oss-20b", "openai/gpt-oss-120b"},
+    "cloudflare": {"@cf/zai-org/glm-4.7-flash", "@cf/google/gemma-4-26b-a4b-it"},
+    # OpenRouter's free router filters for function-call support when tool schemas are present.
+    "openrouter": {"openrouter/free"},
 }
 
 
@@ -25,6 +28,7 @@ class ToolCallingNotSupportedError(RuntimeError):
 class AgentLoopResult:
     text: str
     tool_steps: tuple[str, ...]
+    usage: dict[str, int] = field(default_factory=dict)
 
 
 def _message_text(message: Any) -> str:
@@ -61,6 +65,7 @@ async def run_agent_loop(
     model_name: str,
     permissions: set[str] | None = None,
     max_steps: int = 8,
+    tool_choice: str = "auto",
 ) -> AgentLoopResult:
     """Call the model, run requested registered tools, and return its final answer."""
     schemas = registry.model_tools(permissions)
@@ -69,36 +74,40 @@ async def run_agent_loop(
     if model_name not in VERIFIED_TOOL_MODELS.get(provider, set()):
         raise ToolCallingNotSupportedError(
             f"Native tool calling has not been verified for {provider} model '{model_name}'. "
-            "Choose Gemini gemini-3.8-flash or Groq openai/gpt-oss-20b / openai/gpt-oss-120b, "
-            "or set a verified model in .env."
+            "Choose Gemini gemini-3.8-flash, Groq openai/gpt-oss-20b / openai/gpt-oss-120b, "
+            "Cloudflare @cf/zai-org/glm-4.7-flash / @cf/google/gemma-4-26b-a4b-it, "
+            "or OpenRouter openrouter/free, or set a verified model in .env."
         )
     bind_tools = getattr(model, "bind_tools", None)
     if not callable(bind_tools):
         raise ToolCallingNotSupportedError(
             f"The {provider} integration for '{model_name}' does not expose native tool calling. "
-            "Choose Gemini gemini-3.8-flash or a Groq GPT-OSS model."
+            "Choose a verified Gemini, Groq, Cloudflare, or OpenRouter model."
         )
     try:
-        tool_model = bind_tools(schemas, tool_choice="auto")
+        provider_tool_choice = True if provider == "google" and tool_choice == "required" else tool_choice
+        tool_model = bind_tools(schemas, tool_choice=provider_tool_choice)
     except (NotImplementedError, TypeError, ValueError) as exc:
         raise ToolCallingNotSupportedError(
             f"Native tool calling could not be enabled for {provider} model '{model_name}'. "
-            "Choose Gemini gemini-3.8-flash or a Groq GPT-OSS model."
+            "Choose a verified Gemini, Groq, Cloudflare, or OpenRouter model."
         ) from exc
 
     working_messages = list(messages)
     allowed_names = registry.allowed_names(permissions)
     used_steps: list[str] = []
+    usage: dict[str, int] = {"input_tokens": 0, "output_tokens": 0}
     seen_calls: set[str] = set()
 
     for _ in range(max_steps):
         response = await tool_model.ainvoke(working_messages)
+        _add_usage(usage, getattr(response, "usage_metadata", None))
         calls = list(getattr(response, "tool_calls", None) or [])
         if not calls:
             text = _message_text(response)
             if not text:
                 raise RuntimeError("The model returned no final answer after the tool loop.")
-            return AgentLoopResult(text=text, tool_steps=tuple(used_steps))
+            return AgentLoopResult(text=text, tool_steps=tuple(used_steps), usage={k: v for k, v in usage.items() if v})
 
         working_messages.append(response)
         remaining_steps = max_steps - len(used_steps)
@@ -138,7 +147,15 @@ async def run_agent_loop(
     # Give the model one final chance to summarize the last tool results, with no
     # tools bound, so reaching the tool limit still produces a clean user answer.
     final = await model.ainvoke(working_messages)
+    _add_usage(usage, getattr(final, "usage_metadata", None))
     text = _message_text(final)
     if not text:
         raise RuntimeError("The model reached the tool step limit without a readable final answer.")
-    return AgentLoopResult(text=text, tool_steps=tuple(used_steps))
+    return AgentLoopResult(text=text, tool_steps=tuple(used_steps), usage={k: v for k, v in usage.items() if v})
+
+
+def _add_usage(target: dict[str, int], source: Any) -> None:
+    if not isinstance(source, dict):
+        return
+    target["input_tokens"] += int(source.get("input_tokens", source.get("prompt_tokens", 0)) or 0)
+    target["output_tokens"] += int(source.get("output_tokens", source.get("completion_tokens", 0)) or 0)

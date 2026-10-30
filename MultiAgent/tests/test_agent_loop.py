@@ -60,6 +60,26 @@ class AgentLoopTests(unittest.IsolatedAsyncioTestCase):
             )
         self.assertEqual(model.calls, 0)
 
+    async def test_verified_free_cloudflare_and_openrouter_models_support_tool_loop(self):
+        for provider, model_name in (
+            ("cloudflare", "@cf/zai-org/glm-4.7-flash"),
+            ("cloudflare", "@cf/google/gemma-4-26b-a4b-it"),
+            ("openrouter", "openrouter/free"),
+        ):
+            with self.subTest(provider=provider, model=model_name):
+                model = CalculatorThenAnswerModel()
+                result = await run_agent_loop(
+                    model,
+                    [HumanMessage(content="Calculate 15% of 200")],
+                    tools,
+                    provider=provider,
+                    model_name=model_name,
+                    permissions={"math"},
+                    max_steps=3,
+                )
+                self.assertEqual(result.text, "15% of 200 is 30.")
+                self.assertEqual(result.tool_steps, ("calculator",))
+
 
 if __name__ == "__main__":
     unittest.main()

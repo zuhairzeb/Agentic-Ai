@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#f6faf8" />
+  <title>Morrow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css?v=20261030-platform" />
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+  <script defer src="/assets/app.js?v=20261030-platform"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar">
+      <div class="brand-row">
+        <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" focusable="false"><path d="M6 24V8l10 11L26 8v16" /></svg></div>
+        <div class="brand-copy"><div id="brandName" class="brand-name">Morrow</div><div class="brand-caption">Answers and useful builds</div></div>
+        <button class="icon-button mobile-close" id="closeSidebar" aria-label="Close sidebar">×</button>
+      </div>
+
+      <div class="sidebar-actions">
+        <button class="side-action primary-action" id="newChat"><span class="action-icon">＋</span><span>New chat</span><kbd>Ctrl K</kbd></button>
+        <button class="side-action" id="temporaryChat"><span class="action-icon">◌</span><span>Temporary chat</span><span class="live-dot" id="temporaryDot"></span></button>
+        <button class="side-action" id="openTraining"><span class="action-icon">✳</span><span>AI Training Center</span></button>
+      </div>
+
+      <div class="history-heading"><span>Your chats</span><button class="icon-button small" id="toggleArchived" title="Show archived chats">•••</button></div>
+      <label class="search-box"><span>⌕</span><input id="searchChats" type="search" placeholder="Search chats" autocomplete="off" /></label>
+      <div id="chatList" class="chat-list"><div class="list-loading">Loading your chats…</div></div>
+
+      <div class="sidebar-footer">
+        <button class="side-action settings-action" id="openSettings"><span class="action-icon">⚙</span><span>Settings</span><span class="settings-shortcut">Preferences</span></button>
+        <div class="profile-row"><div class="profile-avatar">Z</div><div class="profile-copy"><strong id="profileName">Local workspace</strong><span>Private on this device</span></div><span class="profile-menu">•••</span></div>
+      </div>
+    </aside>
+    <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+    <main class="main-panel">
+      <header class="topbar">
+        <button class="icon-button menu-toggle" id="menuToggle" aria-label="Toggle sidebar" title="Toggle sidebar">☰</button>
+        <div class="topbar-context"><span id="chatTitle">New chat</span><span class="title-chevron">⌄</span></div>
+        <div class="topbar-right">
+          <button class="top-control" id="temporaryChatTop" type="button" aria-label="Start a temporary chat">Temporary chat</button>
+          <button class="top-control" id="agentSelectButton"><span id="agentLabel">Auto</span><span class="title-chevron">⌄</span></button>
+        </div>
+      </header>
+
+      <section class="conversation" id="conversation">
+        <div id="welcome" class="welcome-screen">
+          <div class="welcome-orb" aria-hidden="true">M</div>
+          <div class="eyebrow">A workspace for useful work</div>
+          <h1 id="welcomeTitle" aria-label="Welcome Back"></h1>
+          <p class="welcome-description" id="welcomeDescription">Ask a question, explore an idea, or build something you can use.</p>
+          <div class="starter-grid">
+            <button class="starter-card" data-prompt="Help me write or rewrite: "><span class="starter-symbol violet">✎</span><span><strong>Write something</strong><small>Draft, edit, or find the right words</small></span><span class="card-arrow">↗</span></button>
+            <button class="starter-card" data-prompt="Research and synthesize findings on: "><span class="starter-symbol blue">⌕</span><span><strong>Explore a topic</strong><small>Understand something in depth</small></span><span class="card-arrow">↗</span></button>
+            <button class="starter-card" data-prompt="Analyze this and explain the result: "><span class="starter-symbol amber">∑</span><span><strong>Analyze a problem</strong><small>Check numbers and reason it through</small></span><span class="card-arrow">↗</span></button>
+            <button class="starter-card" data-prompt="Create an interactive web app for: "><span class="starter-symbol mint">⌘</span><span><strong>Build an idea</strong><small>Turn a prompt into working code</small></span><span class="card-arrow">↗</span></button>
+          </div>
+        </div>
+        <div id="messages" class="messages" aria-live="polite"></div>
+      </section>
+
+      <footer class="composer-area">
+        <div id="slashMenu" class="slash-menu" role="listbox" aria-label="Chat commands" hidden></div>
+        <div id="uploadStatus" class="upload-status" role="status" aria-live="polite" hidden></div>
+        <form class="composer" id="chatForm">
+          <input id="fileInput" type="file" accept=".txt,.md,.markdown,.pdf,text/plain,text/markdown,application/pdf" hidden />
+          <div id="dropOverlay" class="drop-overlay" aria-hidden="true"><span class="drop-icon">↑</span><strong>Drop your file to attach</strong><small>TXT, Markdown, or PDF · up to 10 MB</small></div>
+          <textarea id="messageInput" rows="1" placeholder="Message your assistant…" aria-label="Message your assistant"></textarea>
+          <div class="composer-toolbar">
+            <div class="composer-left"><button id="attachFile" class="attach-button" type="button" aria-label="Upload a file" title="Upload a TXT, Markdown, or PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5"/></svg><span>Attach files</span></button><span class="composer-hint">Type / for tools | Enter to send</span></div>
+            <div class="composer-actions"><span id="recordingStatus" role="status" aria-live="polite" hidden></span><button id="voiceInput" class="attach-button voice-button" type="button" aria-label="Start voice input" title="Voice input" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"></path></svg></button><button class="stop-button" id="stopGeneration" type="button" hidden>Stop</button><button class="send-button" id="sendButton" type="submit" aria-label="Send message"><span>↑</span></button></div>
+          </div>
+        </form>
+        <div class="disclaimer">AI can make mistakes. Check important details.</div>
+      </footer>
+    </main>
+    <aside class="preview-panel" id="previewPanel" aria-label="Code workspace" aria-hidden="true">
+      <header class="preview-header">
+        <div class="preview-title-group"><strong id="previewTitle">Preview</strong><span id="previewFileLabel">No project</span></div>
+        <button class="icon-button" id="closePreview" type="button" aria-label="Close preview">×</button>
+      </header>
+      <div class="preview-toolbar">
+        <div class="preview-tabs" role="tablist" aria-label="Preview and source">
+          <button type="button" class="preview-tab active" data-preview-tab="preview" role="tab" aria-selected="true">Preview</button>
+          <button type="button" class="preview-tab" data-preview-tab="code" role="tab" aria-selected="false">Code</button>
+        </div>
+        <div class="preview-actions">
+          <button type="button" id="refreshPreview">Refresh</button>
+          <button type="button" id="openPreviewTab">Open in new tab</button>
+          <button type="button" id="fullscreenPreview">Fullscreen</button>
+          <button type="button" id="copyPreviewCode">Copy</button>
+          <button type="button" id="downloadPreviewCode">Download</button>
+        </div>
+      </div>
+      <div class="preview-subtoolbar">
+        <label class="preview-file-picker"><span>File</span><select id="previewFileSelect" aria-label="Preview source file"></select></label>
+        <label class="preview-version-picker" id="previewVersionWrap" hidden><span>Version</span><select id="previewVersionSelect" aria-label="Project version history"></select></label>
+        <div class="preview-widths" role="group" aria-label="Preview width">
+          <button type="button" data-preview-width="desktop" class="active">Desktop</button>
+          <button type="button" data-preview-width="tablet">Tablet</button>
+          <button type="button" data-preview-width="mobile">Mobile</button>
+        </div>
+      </div>
+      <div class="preview-stage" id="previewStage">
+        <iframe id="previewFrame" title="Generated app preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+        <section class="preview-code-view" id="previewCodeView" hidden>
+          <div class="preview-code-meta"><span id="previewLanguage">HTML</span><span id="previewCodeFilename">index.html</span></div>
+          <pre><code id="previewCodeSource"></code></pre>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <div class="modal-backdrop" id="settingsBackdrop" aria-hidden="true">
+    <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <header class="settings-header"><div><div class="eyebrow">PERSONALIZE</div><h2 id="settingsTitle">Settings</h2><p>Choose how your assistant works.</p></div><button class="icon-button" id="closeSettings" aria-label="Close settings">×</button></header>
+      <div class="settings-content">
+        <label class="setting-row"><span><strong>Your name</strong><small>Used in your welcome message and profile</small></span><input id="settingName" class="name-input" type="text" maxlength="60" autocomplete="name" placeholder="Your name" /></label>
+        <label class="setting-row"><span><strong>Assistant</strong><small>Choose who answers your messages</small></span><select id="settingAgent"><option>Auto</option><option>General</option><option>Code</option><option>Math</option><option>Writing</option><option>Research</option><option>Agent 1</option><option>Agent 2</option></select></label>
+          <label class="setting-row"><span><strong>Provider</strong><small>Choose a preferred provider; eligible providers can take over after an error</small></span><select id="settingProvider"><option>Auto</option><option>Gemini</option><option>Groq</option><option>Cloudflare Workers AI</option><option>OpenRouter free</option><option>Ollama</option></select></label>
+        <label class="setting-row"><span><strong>Model</strong><small>Use the provider default or select a model</small></span><select id="settingModel"><option>Auto (provider default)</option></select></label>
+        <label class="setting-row"><span><strong>Model quality</strong><small>Trade speed for a more considered answer</small></span><select id="settingTier"><option>Fast</option><option>Smart</option></select></label>
+        <label class="setting-row"><span><strong>Response style</strong><small>Set the usual answer length</small></span><select id="settingStyle"><option>Short</option><option>Normal</option><option>Detailed</option></select></label>
+        <label class="setting-row"><span><strong>Reply language</strong><small>Choose the default response language</small></span><select id="settingLanguage"><option>English</option><option>Urdu</option><option>Roman Urdu</option></select></label>
+        <label class="setting-row setting-row-stack"><span><strong>Custom instructions</strong><small>Personal guidance for relevant answers</small></span><textarea id="settingInstructions" maxlength="4000" placeholder="Tell Morrow how you prefer it to respond..."></textarea></label>
+        <label class="setting-row"><span><strong>Creativity</strong><small>Lower is more predictable; higher is more varied</small></span><input id="settingTemperature" type="range" min="0" max="1" step="0.1" /></label>
+        <label class="setting-row"><span><strong>Stream responses</strong><small>Show the answer as it is being generated</small></span><input id="settingStreaming" class="switch" type="checkbox" checked /></label>
+        <label class="setting-row"><span><strong>Voice responses</strong><small>Read assistant replies aloud when supported by your browser</small></span><input id="settingVoice" class="switch" type="checkbox" /></label>
+        <label class="setting-row"><span><strong>Use enabled MCP tools in chats</strong><small>Only servers you enabled in the Training Center are available</small></span><input id="settingMcpTools" class="switch" type="checkbox" /></label>
+        <label class="setting-row"><span><strong>Saved preferences</strong><small>Use preferences you explicitly asked to remember</small></span><input id="settingMemory" class="switch" type="checkbox" /></label>
+        <label class="setting-row"><span><strong>Web search</strong><small>Search current public information automatically or on every question</small></span><select id="settingWebSearch"><option>Auto</option><option>Always</option><option>Off</option></select></label>
+        <label class="setting-row"><span><strong>Search provider</strong><small>Serper or Tavily falls back to DuckDuckGo when unavailable</small></span><select id="settingSearchProvider"><option>Auto</option><option>Serper</option><option>Tavily</option><option>DuckDuckGo</option></select></label>
+        <div class="setting-note"><span>◉</span><p>Temporary chats are never saved to history and do not use saved preferences.</p></div>
+      </div>
+        <section class="data-controls" aria-label="Data controls"><h3>Manage your data</h3><p>Remove saved conversations or preferences from this device.</p><button type="button" class="data-delete-button" id="deleteAllChats">Delete all chats</button><button type="button" class="data-delete-button" id="deleteAllMemory">Delete saved memory</button></section>
+      <footer class="settings-footer"><span id="settingsSaved" class="settings-saved">Changes save to this device</span><button class="save-button" id="saveSettings">Save settings</button></footer>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="trainingBackdrop" aria-hidden="true">
+    <section class="settings-panel training-panel" role="dialog" aria-modal="true" aria-labelledby="trainingTitle">
+      <header class="settings-header"><div><div class="eyebrow">EXTEND MORROW</div><h2 id="trainingTitle">AI Training Center</h2><p>Add knowledge and instructions. This does not fine-tune the model.</p></div><button class="icon-button" id="closeTraining" aria-label="Close Training Center">×</button></header>
+      <div class="training-content">
+        <section class="training-section"><h3>Knowledge sources</h3><p>Uploaded sources are searchable context (RAG); they do not retrain the model.</p>
+          <form id="knowledgeUploadForm" class="platform-form"><input id="knowledgeFile" type="file" accept=".txt,.md,.markdown,.csv,.docx,.pdf" required /><button class="save-button" type="submit">Add document</button></form>
+          <form id="knowledgeUrlForm" class="platform-form"><input id="knowledgeUrl" type="url" placeholder="https://public-site.example/page" required /><button class="platform-button" type="submit">Add website</button></form>
+          <div id="knowledgeSources" class="platform-list"></div>
+        </section>
+        <section class="training-section"><h3>Skills</h3><p>Skills add instructions. Imported scripts are stored as files and never run automatically.</p>
+          <form id="skillEditForm" class="platform-form platform-form-column skill-edit-form" hidden><strong>Edit installed skill</strong><input id="skillEditId" type="hidden" /><input id="skillEditName" maxlength="100" placeholder="Skill name" required /><input id="skillEditDescription" maxlength="500" placeholder="What does this skill help with?" /><textarea id="skillEditInstructions" maxlength="100000" placeholder="SKILL.md instructions" required></textarea><div class="platform-item-actions"><button class="save-button" type="submit">Save changes</button><button id="cancelSkillEdit" class="platform-button" type="button">Cancel</button></div></form>
+          <form id="skillTextForm" class="platform-form platform-form-column"><input id="skillName" maxlength="100" placeholder="Skill name" required /><input id="skillDescription" maxlength="500" placeholder="What does this skill help with?" /><textarea id="skillInstructions" maxlength="100000" placeholder="Write the SKILL.md instructions" required></textarea><button class="save-button" type="submit">Install skill</button></form>
+          <form id="skillGithubForm" class="platform-form"><input id="skillGithubUrl" type="url" placeholder="https://github.com/owner/repo" required /><button class="platform-button" type="submit">Import from GitHub</button></form>
+          <form id="skillZipForm" class="platform-form"><input id="skillZip" type="file" accept=".zip,application/zip" required /><button class="platform-button" type="submit">Import ZIP</button></form>
+          <div id="skillList" class="platform-list"></div>
+        </section>
+        <section class="training-section"><h3>Training examples</h3><p>Approved examples guide similar answers and can be exported as JSONL.</p>
+          <form id="exampleForm" class="platform-form platform-form-column"><input id="exampleQuestion" placeholder="User question" required /><textarea id="exampleAnswer" placeholder="Preferred answer" required></textarea><input id="exampleCategory" placeholder="Category (optional)" /><button class="save-button" type="submit">Save example</button></form>
+          <a class="platform-button platform-link" href="/api/training/export">Export enabled examples (JSONL)</a><div id="exampleList" class="platform-list"></div>
+        </section>
+        <section class="training-section"><h3>MCP servers</h3><p>Configure an existing Streamable HTTP server. GitHub repositories are not executed or installed by this manager.</p>
+          <form id="mcpForm" class="platform-form platform-form-column"><input id="mcpName" maxlength="100" placeholder="Server name" required /><input id="mcpUrl" type="url" placeholder="https://server.example/mcp or http://localhost:8000/mcp" required /><input id="mcpToken" type="password" maxlength="4000" placeholder="Optional bearer token" autocomplete="off" /><button class="save-button" type="submit">Save server</button></form>
+          <div id="mcpList" class="platform-list"></div>
+        </section>
+        <section class="training-section unsupported-feature"><h3>Fine-tuning and evaluation</h3><p>Fine-tuning jobs and a quality evaluation runner are not configured for the current providers. Training examples can be reviewed and exported for an external workflow; saving them does not train or score the model.</p></section>
+        <div id="trainingStatus" class="training-status" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>
+

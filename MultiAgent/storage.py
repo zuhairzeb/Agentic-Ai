@@ -94,6 +94,18 @@ class SQLiteStore:
                     UNIQUE(user_identifier, name)
                 );
                 CREATE INDEX IF NOT EXISTS idx_library_user ON library_documents(user_identifier, id);
+                CREATE TABLE IF NOT EXISTS platform_items (
+                    user_identifier TEXT NOT NULL,
+                    item_type TEXT NOT NULL,
+                    item_id TEXT NOT NULL,
+                    values_json TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(user_identifier,item_type,item_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_platform_items_user_type
+                    ON platform_items(user_identifier,item_type,updated_at);
                 '''
             )
             # Preserve settings and saved memories from the former local login profile.
@@ -141,10 +153,21 @@ class SQLiteStore:
             if role == "user":
                 title = " ".join(content.split())[:80] or "New conversation"
                 conn.execute(
-                    "UPDATE conversations SET title=? WHERE id=? AND user_identifier=? AND title='New conversation'",
+                    "UPDATE conversations SET title=? WHERE id=? AND user_identifier=? AND title IN ('New conversation','New chat')",
                     (title, conversation_id, user_identifier),
                 )
             return result.rowcount == 1
+
+    def create_conversation(self, user_identifier: str, conversation_id: str | None = None) -> dict[str, Any]:
+        """Create a saved conversation and return its new record."""
+        conversation_id = conversation_id or __import__("uuid").uuid4().hex
+        now = utc_now()
+        with self._lock, self.connect() as conn:
+            conn.execute(
+                "INSERT INTO conversations(id,user_identifier,title,created_at,updated_at) VALUES(?,?,?,?,?)",
+                (conversation_id, user_identifier, "New chat", now, now),
+            )
+        return self.get_conversation(conversation_id, user_identifier) or {}
 
     def get_conversation_messages(self, conversation_id: str, user_identifier: str) -> list[dict[str, Any]]:
         with self.connect() as conn:
@@ -239,6 +262,17 @@ class SQLiteStore:
             result = conn.execute("DELETE FROM conversations WHERE id=? AND user_identifier=?", (conversation_id, user_identifier))
         return result.rowcount == 1
 
+    def delete_all_conversations(self, user_identifier: str) -> int:
+        """Delete all saved conversations belonging to one user."""
+        with self._lock, self.connect() as conn:
+            conn.execute(
+                "DELETE FROM conversation_messages WHERE conversation_id IN "
+                "(SELECT id FROM conversations WHERE user_identifier=?)",
+                (user_identifier,),
+            )
+            result = conn.execute("DELETE FROM conversations WHERE user_identifier=?", (user_identifier,))
+            return result.rowcount
+
     def save_library_document(self, user_identifier: str, name: str, content: str) -> int:
         now = utc_now()
         safe_name = Path(name).name[:255]
@@ -296,6 +330,50 @@ class SQLiteStore:
                 "ON CONFLICT(user_identifier) DO UPDATE SET values_json=excluded.values_json, updated_at=excluded.updated_at",
                 (user_identifier, json.dumps(values), utc_now()),
             )
+
+    def save_platform_item(self, user_identifier: str, item_type: str, item_id: str, values: dict[str, Any], enabled: bool = True) -> None:
+        now = utc_now()
+        with self._lock, self.connect() as conn:
+            conn.execute(
+                "INSERT INTO platform_items(user_identifier,item_type,item_id,values_json,enabled,created_at,updated_at) "
+                "VALUES(?,?,?,?,?,?,?) ON CONFLICT(user_identifier,item_type,item_id) DO UPDATE SET "
+                "values_json=excluded.values_json,enabled=excluded.enabled,updated_at=excluded.updated_at",
+                (user_identifier, item_type, item_id, json.dumps(values, ensure_ascii=False), int(enabled), now, now),
+            )
+
+    def list_platform_items(self, user_identifier: str, item_type: str, include_disabled: bool = True) -> list[dict[str, Any]]:
+        query = "SELECT item_id,values_json,enabled,created_at,updated_at FROM platform_items WHERE user_identifier=? AND item_type=?"
+        params: tuple[Any, ...] = (user_identifier, item_type)
+        if not include_disabled:
+            query += " AND enabled=1"
+        query += " ORDER BY updated_at DESC"
+        with self.connect() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [{"id": row["item_id"], **json.loads(row["values_json"]), "enabled": bool(row["enabled"]), "created_at": row["created_at"], "updated_at": row["updated_at"]} for row in rows]
+
+    def get_platform_item(self, user_identifier: str, item_type: str, item_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT item_id,values_json,enabled,created_at,updated_at FROM platform_items WHERE user_identifier=? AND item_type=? AND item_id=?",
+                (user_identifier, item_type, item_id),
+            ).fetchone()
+        return {"id": row["item_id"], **json.loads(row["values_json"]), "enabled": bool(row["enabled"]), "created_at": row["created_at"], "updated_at": row["updated_at"]} if row else None
+
+    def set_platform_item_enabled(self, user_identifier: str, item_type: str, item_id: str, enabled: bool) -> bool:
+        with self._lock, self.connect() as conn:
+            result = conn.execute(
+                "UPDATE platform_items SET enabled=?,updated_at=? WHERE user_identifier=? AND item_type=? AND item_id=?",
+                (int(enabled), utc_now(), user_identifier, item_type, item_id),
+            )
+        return result.rowcount == 1
+
+    def delete_platform_item(self, user_identifier: str, item_type: str, item_id: str) -> bool:
+        with self._lock, self.connect() as conn:
+            result = conn.execute(
+                "DELETE FROM platform_items WHERE user_identifier=? AND item_type=? AND item_id=?",
+                (user_identifier, item_type, item_id),
+            )
+        return result.rowcount == 1
 
     def add_memory(self, user_identifier: str, content: str) -> int:
         now = utc_now()

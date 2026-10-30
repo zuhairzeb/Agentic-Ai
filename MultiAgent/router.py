@@ -1,4 +1,4 @@
-"""Local, rule-based routing that does not make an extra model call."""
+"""Agent definitions and deterministic routing fallbacks."""
 
 from dataclasses import dataclass
 import re
@@ -31,6 +31,11 @@ AGENTS = {
         "general",
         "General Assistant",
         "You are a helpful general assistant. Answer conversational, explanatory, coding, and general knowledge questions clearly.",
+    ),
+    "code": Route(
+        "code",
+        "Code Agent",
+        "You are a software development agent. Build and fix code directly when requested.",
     ),
     "agent1": Route(
         "agent1",
@@ -66,7 +71,8 @@ def select_route(message: str, selection: str = "Auto") -> tuple[Route, str]:
             "general": "general",
             "general agent": "general",
             "general assistant": "general",
-            "code": "general",
+            "code": "code",
+            "code agent": "code",
             "agent 1": "agent1",
             "agent1": "agent1",
             "agent 2": "agent2",
@@ -76,7 +82,7 @@ def select_route(message: str, selection: str = "Auto") -> tuple[Route, str]:
             raise ValueError(f"Unknown agent selection: {selection}")
         return AGENTS[key], text
 
-    match = re.match(r"^(math|analyze|writer|writing|research|agent1|agent2)\b\s*[:,]?\s*", text, re.I)
+    match = re.match(r"^(math|analyze|writer|writing|research|code|agent1|agent2)\b\s*[:,]?\s*", text, re.I)
     if match:
         command = match.group(1).lower()
         key = {
@@ -99,12 +105,29 @@ def select_route(message: str, selection: str = "Auto") -> tuple[Route, str]:
     writing_patterns = (
         r"\b(write|writer|draft|compose|rewrite|summari[sz]e|email|essay|story|poem|blog post|haiku|resume|curriculum vitae|cv|report|proposal|document|cover letter)\b",
     )
+    code_patterns = (
+        r"\b(fix|debug|code|script|website|web app|webpage|web page|landing page|login page|form|calculator|interactive app|software|bug)\b",
+        r"\b(build|create|make|generate|implement)\b.{0,60}\b(app|page|website|script|form|calculator|tool|site|component|function)\b",
+    )
 
     if any(re.search(pattern, lowered) for pattern in math_patterns):
         return AGENTS["math"], text
     if any(re.search(pattern, lowered) for pattern in research_patterns):
         return AGENTS["research"], text
+    if any(re.search(pattern, lowered) for pattern in code_patterns):
+        return AGENTS["code"], text
     if any(re.search(pattern, lowered) for pattern in writing_patterns):
         return AGENTS["writing"], text
 
     return AGENTS["general"], text
+
+
+def requires_artifact(message: str) -> bool:
+    """Identify build and code-fix requests that must use the artifact tool."""
+    lowered = message.lower()
+    if re.search(r"\b(fix|debug|repair)\b", lowered) and re.search(r"\b(bug|error|issue|code|script|app|website|page|form|project)\b", lowered):
+        return True
+    return bool(
+        re.search(r"\b(build|create|make|generate|implement|write)\b", lowered)
+        and re.search(r"\b(code|script|program|component|function|app|application|website|webpage|web page|page|form|calculator|tool|site|project|html|python|react|javascript|typescript)\b", lowered)
+    )

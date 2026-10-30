@@ -9,7 +9,7 @@ from unittest.mock import patch
 from docx import Document
 from pypdf import PdfReader
 
-from artifacts import generate_artifacts, save_project, load_project
+from artifacts import generate_artifacts, save_project, load_project, load_project_version
 from app import _parse_project_files, _requested_artifact
 
 
@@ -58,7 +58,8 @@ class ArtifactTests(unittest.TestCase):
     def test_preview_component_uses_an_opaque_sandbox_and_restricts_network(self):
         component = Path(__file__).parents[1] / "public" / "elements" / "CodePreview.jsx"
         source = component.read_text(encoding="utf-8")
-        self.assertIn('sandbox="allow-scripts allow-forms"', source)
+        self.assertIn('sandbox="allow-scripts"', source)
+        self.assertNotIn('sandbox="allow-scripts allow-forms"', source)
         self.assertNotIn("allow-same-origin", source)
         self.assertIn("connect-src 'none'", source)
         self.assertIn('role="tab"', source)
@@ -92,6 +93,18 @@ document.querySelector('form').addEventListener('submit', e => e.preventDefault(
             self.assertTrue(all(item.path.is_file() and item.path.stat().st_size for item in generated))
             with self.assertRaises(ValueError):
                 save_project({"../../outside.txt": "no"}, "thread", "Unsafe")
+
+    def test_project_updates_keep_restorable_versions(self):
+        first = {"index.html": "<!doctype html><html><body>First</body></html>"}
+        second = {"index.html": "<!doctype html><html><body>Second</body></html>"}
+        with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {"APP_ARTIFACT_DIR": directory}):
+            save_project(first, "versioned-thread", "Versioned")
+            save_project(second, "versioned-thread", "Versioned")
+            current = load_project("versioned-thread")
+            old = load_project_version("versioned-thread", 1)
+            self.assertEqual(current["files"], second)
+            self.assertEqual(current["version"], 2)
+            self.assertEqual(old["files"], first)
 
 
 if __name__ == "__main__":

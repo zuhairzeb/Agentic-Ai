@@ -75,7 +75,7 @@ class AgentOrchestrator:
             "write": "Writing",
             "summarize": "Writing",
             "research": "research",
-            "code": "General",
+            "code": "Code",
         }
         route, prompt = select_route(message, selection=explicit.get(command, default_agent))
         tool_name = None

@@ -119,7 +119,7 @@ export default function CodePreview() {
         </div>
       </div>
       {tab === "preview" && webPreview ? (
-        <iframe key={refresh} title="Isolated generated website preview" sandbox="allow-scripts allow-forms" ref={frameRef} referrerPolicy="no-referrer" className="h-[min(76vh,840px)] min-h-[560px] w-full bg-white max-md:h-[65vh] max-md:min-h-[420px]" srcDoc={preview} />
+        <iframe key={refresh} title="Isolated generated website preview" sandbox="allow-scripts" ref={frameRef} referrerPolicy="no-referrer" className="h-[min(76vh,840px)] min-h-[560px] w-full bg-white max-md:h-[65vh] max-md:min-h-[420px]" srcDoc={preview} />
       ) : (
         <div className="grid min-h-[min(58vh,560px)] grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(240px,0.85fr)]">
           <div className="min-w-0 border-b lg:border-b-0 lg:border-r">
@@ -127,7 +127,7 @@ export default function CodePreview() {
             <pre className="m-0 max-h-56 overflow-auto rounded-none border-0 bg-[#111827] p-4 font-mono text-[13px] leading-6 text-slate-100"><code>{highlighted(files[selected] || "")}</code></pre>
             <textarea aria-label={`Edit ${selected}`} spellCheck="false" value={files[selected] || ""} onChange={(event) => setFiles((current) => ({ ...current, [selected]: event.target.value }))} className="min-h-[min(34vh,320px)] w-full resize-y border-t border-slate-700 bg-[#111827] p-4 font-mono text-[13px] leading-6 text-slate-100 outline-none" />
           </div>
-          {webPreview ? <iframe title="Updated isolated generated website preview" sandbox="allow-scripts allow-forms" ref={frameRef} referrerPolicy="no-referrer" className="h-[min(72vh,760px)] min-h-[520px] w-full bg-white max-md:h-[60vh] max-md:min-h-[400px]" srcDoc={preview} /> : <div className="flex items-center p-6 text-sm text-muted-foreground">No preview runtime is configured for this project type. Source editing and downloads are available.</div>}
+          {webPreview ? <iframe title="Updated isolated generated website preview" sandbox="allow-scripts" ref={frameRef} referrerPolicy="no-referrer" className="h-[min(72vh,760px)] min-h-[520px] w-full bg-white max-md:h-[60vh] max-md:min-h-[400px]" srcDoc={preview} /> : <div className="flex items-center p-6 text-sm text-muted-foreground">No preview runtime is configured for this project type. Source editing and downloads are available.</div>}
         </div>
       )}
       {tab === "preview" && runtimeError && <div role="alert" className="border-t bg-destructive/10 px-4 py-3 text-sm text-destructive">Preview runtime error: {runtimeError}</div>}

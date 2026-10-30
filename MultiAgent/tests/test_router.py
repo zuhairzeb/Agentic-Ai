@@ -1,6 +1,6 @@
 import unittest
 
-from router import AGENTS, select_route
+from router import AGENTS, requires_artifact, select_route
 
 
 class RouterTests(unittest.TestCase):
@@ -42,6 +42,17 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(select_route("investigate market trends")[0].key, "research")
         self.assertIn("general", AGENTS)
         self.assertIn("research", AGENTS)
+
+    def test_build_requests_require_artifact_tool(self):
+        prompts = (
+            "Create an interactive web app for a social media profile",
+            "Make a login page",
+            "Build a simple calculator",
+        )
+        for prompt in prompts:
+            with self.subTest(prompt=prompt):
+                self.assertEqual(select_route(prompt)[0].key, "code")
+                self.assertTrue(requires_artifact(prompt))
 
 
 if __name__ == "__main__":

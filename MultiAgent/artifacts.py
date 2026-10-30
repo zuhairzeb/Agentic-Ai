@@ -10,6 +10,7 @@ import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Any
 from xml.sax.saxutils import escape
 
 from docx import Document
@@ -205,6 +206,16 @@ def save_project(files: dict[str, str], conversation_id: str, title: str = "proj
     directory = root / _conversation_folder(conversation_id) / _slug(title)
     directory.mkdir(parents=True, exist_ok=True)
     project_root = _contained_path(directory, root)
+    manifest = directory / "project.json"
+    previous: dict[str, Any] = {}
+    if manifest.is_file():
+        try:
+            _contained_path(manifest, project_root)
+            loaded = json.loads(manifest.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict):
+                previous = loaded
+        except (OSError, ValueError, UnicodeError):
+            previous = {}
     normalized: dict[str, str] = {}
     for name, content in files.items():
         safe_name = _safe_project_path(name)
@@ -224,8 +235,23 @@ def save_project(files: dict[str, str], conversation_id: str, title: str = "proj
         _contained_path(path, project_root).write_text(content, encoding="utf-8")
         if not path.is_file() or path.read_text(encoding="utf-8") != content:
             raise OSError("Project file verification failed.")
-    manifest = directory / "project.json"
-    _contained_path(manifest, project_root).write_text(json.dumps({"title": title, "files": normalized}, ensure_ascii=False), encoding="utf-8")
+    prior_version = max(0, int(previous.get("version", 0)))
+    unchanged = previous.get("files") == normalized and prior_version > 0
+    version = prior_version if unchanged else prior_version + 1
+    versions = list(previous.get("versions", [])) if isinstance(previous.get("versions"), list) else []
+    if not unchanged:
+        version_dir = directory / "versions" / f"v{version:04d}"
+        version_dir.mkdir(parents=True, exist_ok=True)
+        safe_version_dir = _contained_path(version_dir, project_root)
+        for name, content in normalized.items():
+            destination = safe_version_dir.joinpath(*name.split("/"))
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            _contained_path(destination, safe_version_dir).write_text(content, encoding="utf-8")
+        versions.append({"version": version, "created_at": datetime.now(timezone.utc).isoformat(timespec="seconds")})
+    _contained_path(manifest, project_root).write_text(
+        json.dumps({"title": title, "files": normalized, "version": version, "versions": versions}, ensure_ascii=False),
+        encoding="utf-8",
+    )
     zip_path = directory / f"{_slug(title)}.zip"
     safe_zip_path = _contained_path(zip_path, project_root)
     with zipfile.ZipFile(safe_zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
@@ -265,7 +291,39 @@ def load_project(conversation_id: str) -> dict | None:
                 return None
     except (ValueError, UnicodeError):
         return None
-    return {"title": str(data.get("title") or "project"), "files": data["files"]}
+    return {
+        "title": str(data.get("title") or "project"),
+        "files": data["files"],
+        "version": int(data.get("version", 1)),
+        "versions": data.get("versions", [{"version": 1}]),
+    }
+
+
+def load_project_version(conversation_id: str, version: int) -> dict | None:
+    """Load a validated immutable project version for the preview history control."""
+    current = load_project(conversation_id)
+    if not current or version < 1 or version not in {item.get("version") for item in current["versions"] if isinstance(item, dict)}:
+        return None
+    root = _artifact_root()
+    parent = root / _conversation_folder(conversation_id) / _slug(current["title"]) / "versions" / f"v{version:04d}"
+    try:
+        _contained_path(parent, root)
+        files = {}
+        for path in parent.rglob("*"):
+            if not path.is_file():
+                continue
+            _contained_path(path, parent)
+            name = path.relative_to(parent).as_posix()
+            _safe_project_path(name)
+            content = path.read_text(encoding="utf-8")
+            if len(content.encode("utf-8")) > 1_000_000:
+                return None
+            files[name] = content
+        if not files:
+            return None
+        return {**current, "files": files, "version": version}
+    except (OSError, ValueError, UnicodeError):
+        return None
 
 
 def _mime_for_source(name: str) -> str:

@@ -13,18 +13,45 @@ load_dotenv(PROJECT_DIR / ".env")
 logger = logging.getLogger(__name__)
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    return default if value is None else value.strip().casefold() in {"1", "true", "yes", "on"}
+
+
+def _provider_list(name: str, default: str) -> tuple[str, ...]:
+    values = os.getenv(name, default)
+    return tuple(item.strip().casefold() for item in values.split(",") if item.strip())
+
+
 @dataclass(frozen=True)
 class Config:
-    google_api_key: str | None = os.getenv("GOOGLE_API_KEY") or None
+    google_api_key: str | None = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or None
     groq_api_key: str | None = os.getenv("GROQ_API_KEY") or None
-    google_model: str = os.getenv("GOOGLE_MODEL", "gemini-3.8-flash")
+    google_model: str = os.getenv("GEMINI_MODEL") or os.getenv("GOOGLE_MODEL", "gemini-3.8-flash")
     groq_fast_model: str = os.getenv("GROQ_FAST_MODEL", "openai/gpt-oss-20b")
     groq_smart_model: str = os.getenv("GROQ_SMART_MODEL", "openai/gpt-oss-120b")
+    cloudflare_account_id: str | None = os.getenv("CLOUDFLARE_ACCOUNT_ID") or None
+    cloudflare_api_token: str | None = os.getenv("CLOUDFLARE_API_TOKEN") or None
+    cloudflare_model: str = os.getenv("CLOUDFLARE_MODEL", "@cf/zai-org/glm-4.7-flash")
+    openrouter_api_key: str | None = os.getenv("OPENROUTER_API_KEY") or None
+    openrouter_model: str = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+    ollama_base_url: str | None = os.getenv("OLLAMA_BASE_URL") or None
+    ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")
+    free_only: bool = _env_bool("FREE_ONLY", False)
+    gemini_free_tier_confirmed: bool = _env_bool("GEMINI_FREE_TIER_CONFIRMED")
+    groq_free_tier_confirmed: bool = _env_bool("GROQ_FREE_TIER_CONFIRMED")
+    cloudflare_free_plan_confirmed: bool = _env_bool("CLOUDFLARE_FREE_PLAN_CONFIRMED")
+    enabled_providers: tuple[str, ...] = _provider_list(
+        "LLM_ENABLED_PROVIDERS", "gemini,groq,cloudflare,openrouter,ollama"
+    )
+    provider_priority: tuple[str, ...] = _provider_list(
+        "LLM_PROVIDER_PRIORITY", "gemini,groq,cloudflare,openrouter,ollama"
+    )
     database_path: Path = PROJECT_DIR / os.getenv("APP_DATABASE", "data/assistant.sqlite3")
 
     def missing_key_message(self, agent: str) -> str | None:
         if agent in {"math", "writing", "research"} and not self.google_api_key:
-            return "The Google Gemini key is missing. Add GOOGLE_API_KEY to this project's .env file."
+            return "The Google Gemini key is missing. Add GEMINI_API_KEY (or legacy GOOGLE_API_KEY) to this project's .env file."
         if agent in {"general", "agent1", "agent2"} and not self.groq_api_key:
             return "The Groq key is missing. Add GROQ_API_KEY to this project's .env file."
         return None
@@ -34,13 +61,13 @@ class Config:
 class Branding:
     """Single source for the app-controlled UI identity."""
 
-    name: str = os.getenv("APP_NAME") or os.getenv("APP_GREETING_NAME") or "AI Assistant"
+    name: str = os.getenv("APP_NAME") or os.getenv("APP_GREETING_NAME") or "Morrow"
     greeting_name: str | None = os.getenv("APP_GREETING_NAME") or None
-    tagline: str = os.getenv("APP_TAGLINE", "A clear place to think, write, and build.")
+    tagline: str = os.getenv("APP_TAGLINE", "A workspace for clear answers and useful builds.")
     logo: str | None = os.getenv("APP_LOGO") or None
     favicon: str | None = os.getenv("APP_FAVICON") or None
     description: str = os.getenv(
-        "APP_DESCRIPTION", "A private, multi-agent assistant for writing, math, research, and general questions."
+        "APP_DESCRIPTION", "A local workspace for questions, research, writing, and interactive builds."
     )
 
 
