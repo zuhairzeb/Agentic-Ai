@@ -9,12 +9,14 @@ import ipaddress
 import logging
 import threading
 import time
+from contextvars import ContextVar
 from typing import Any
 from urllib.parse import urlparse
 
 from config import Config
 
 logger = logging.getLogger(__name__)
+current_request_id: ContextVar[str | None] = ContextVar("morrow_request_id", default=None)
 
 ALIASES = {"gemini": "google", "google": "google", "google gemini": "google", "groq": "groq",
            "cloudflare": "cloudflare", "cloudflare workers ai": "cloudflare",
@@ -111,6 +113,7 @@ class ProviderHealth:
     cooldown_until: float = 0.0
     failure_streak: int = 0
     last_served_at: float | None = None
+    active_requests: int = 0
 
 
 class ProviderHealthRegistry:
@@ -131,17 +134,26 @@ class ProviderHealthRegistry:
         with self._lock:
             row = self._health.setdefault(provider, ProviderHealth())
             row.attempts += 1
-            row.state = "running"
-        return self._clock()
+            row.active_requests += 1
+            if row.cooldown_until <= self._clock():
+                row.state = "running"
+            return self._clock()
 
     def success(self, provider: str, started: float, usage: dict[str, Any] | None = None) -> None:
         with self._lock:
             row = self._health.setdefault(provider, ProviderHealth())
+            row.active_requests = max(0, row.active_requests - 1)
             row.successes += 1
-            row.failure_streak = 0
-            row.cooldown_until = 0
-            row.state = "ready"
-            row.last_error_type = None
+            now = self._clock()
+            # A concurrent request may have opened a circuit after this request
+            # began. Its success must not erase that newer provider cooldown.
+            if row.cooldown_until <= now:
+                row.failure_streak = 0
+                row.cooldown_until = 0
+                row.state = "running" if row.active_requests else "ready"
+                row.last_error_type = None
+            else:
+                row.state = "cooldown"
             row.last_latency_ms = round((self._clock() - started) * 1000, 1)
             row.last_served_at = time.time()
             self._last_served_provider = provider
@@ -152,13 +164,15 @@ class ProviderHealthRegistry:
     def skipped(self, provider: str, started: float, reason: str) -> None:
         with self._lock:
             row = self._health.setdefault(provider, ProviderHealth())
-            row.state = "ready"
+            row.active_requests = max(0, row.active_requests - 1)
+            row.state = "cooldown" if row.cooldown_until > self._clock() else ("running" if row.active_requests else "ready")
             row.last_latency_ms = round((self._clock() - started) * 1000, 1)
             row.last_error_type = reason
 
     def failure(self, provider: str, started: float, exc: Exception, *, status: int | None, retry_after: float | None = None) -> None:
         with self._lock:
             row = self._health.setdefault(provider, ProviderHealth())
+            row.active_requests = max(0, row.active_requests - 1)
             row.failures += 1
             row.failure_streak += 1
             row.last_latency_ms = round((self._clock() - started) * 1000, 1)
@@ -175,6 +189,14 @@ class ProviderHealthRegistry:
                 cooldown = max(exponential, retry_after or 0.0)
                 row.state = "cooldown"
             row.cooldown_until = self._clock() + cooldown
+
+    def cancelled(self, provider: str, started: float) -> None:
+        """Release an in-flight attempt without treating client cancellation as provider failure."""
+        with self._lock:
+            row = self._health.setdefault(provider, ProviderHealth())
+            row.active_requests = max(0, row.active_requests - 1)
+            row.last_latency_ms = round((self._clock() - started) * 1000, 1)
+            row.state = "cooldown" if row.cooldown_until > self._clock() else ("running" if row.active_requests else "ready")
 
     def snapshot(self) -> dict[str, Any]:
         now = self._clock()
@@ -197,6 +219,7 @@ class ProviderHealthRegistry:
                     "last_error_type": row.last_error_type,
                     "cooldown_seconds": max(0, round(row.cooldown_until - now)),
                     "last_served_at": row.last_served_at,
+                    "active_requests": row.active_requests,
                 }
             return result
 

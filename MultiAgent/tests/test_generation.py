@@ -1,12 +1,18 @@
 import unittest
 
-from generation import EmptyResponseError, ProvidersUnavailableError, generate, generate_with_fallback
+from generation import EmptyResponseError, IncompleteResponseError, InterruptedResponseError, ProvidersUnavailableError, generate, generate_with_fallback
 from provider_router import provider_health
 
 
 class Chunk:
     def __init__(self, content):
         self.content = content
+
+
+class MetadataChunk(Chunk):
+    def __init__(self, content, finish_reason):
+        super().__init__(content)
+        self.response_metadata = {"finish_reason": finish_reason}
 
 
 class StreamingModel:
@@ -52,6 +58,46 @@ class GenerationTests(unittest.IsolatedAsyncioTestCase):
             received.append(token)
         self.assertEqual(await generate(StreamingModel(), [], emit), "Hello there")
         self.assertEqual(received, ["Hello", " there"])
+
+    async def test_long_stream_is_complete_only_after_normal_finish(self):
+        class LongModel:
+            async def astream(self, _messages):
+                yield Chunk("A" * 8000)
+                yield MetadataChunk("B" * 8000, "stop")
+        received = []
+        async def emit(token): received.append(token)
+        answer = await generate(LongModel(), [], emit)
+        self.assertEqual(len(answer), 16000)
+        self.assertEqual(len(received), 2)
+
+    async def test_token_limit_is_incomplete_not_successful_or_failed_over(self):
+        received, created = [], []
+        class LimitedModel:
+            async def astream(self, _messages):
+                yield Chunk("Partial answer")
+                yield MetadataChunk("", "length")
+        async def emit(token): received.append(token)
+        async def notice(_provider): pass
+        def make(provider):
+            created.append(provider)
+            return LimitedModel()
+        with self.assertRaises(IncompleteResponseError) as raised:
+            await generate_with_fallback(["google", "groq"], make, [], emit, notice)
+        self.assertEqual(raised.exception.partial, "Partial answer")
+        self.assertEqual(created, ["google"])
+        self.assertEqual(received, ["Partial answer"])
+
+    async def test_stream_error_after_text_is_interrupted_and_keeps_partial(self):
+        class DroppedStream:
+            async def astream(self, _messages):
+                yield Chunk("preserved prefix")
+                raise ConnectionError("socket reset")
+        received = []
+        async def emit(token): received.append(token)
+        with self.assertRaises(InterruptedResponseError) as raised:
+            await generate(DroppedStream(), [], emit)
+        self.assertEqual(raised.exception.partial, "preserved prefix")
+        self.assertEqual(received, ["preserved prefix"])
 
     async def test_non_streaming_fallback(self):
         received = []

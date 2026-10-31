@@ -79,6 +79,7 @@ class SQLiteStore:
                     message_key TEXT NOT NULL,
                     role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
                     content TEXT NOT NULL,
+                    status TEXT NOT NULL DEFAULT 'completed',
                     created_at TEXT NOT NULL,
                     UNIQUE(conversation_id, message_key)
                 );
@@ -108,6 +109,9 @@ class SQLiteStore:
                     ON platform_items(user_identifier,item_type,updated_at);
                 '''
             )
+            message_columns = {row[1] for row in conn.execute("PRAGMA table_info(conversation_messages)")}
+            if "status" not in message_columns:
+                conn.execute("ALTER TABLE conversation_messages ADD COLUMN status TEXT NOT NULL DEFAULT 'completed'")
             # Preserve settings and saved memories from the former local login profile.
             conn.execute(
                 "INSERT INTO app_settings(user_identifier, values_json, updated_at) "
@@ -124,10 +128,12 @@ class SQLiteStore:
 
     def save_conversation_message(
         self, conversation_id: str, user_identifier: str, role: str,
-        content: str, message_key: str, temporary: bool = False,
+        content: str, message_key: str, temporary: bool = False, status: str = "completed",
     ) -> bool:
         if role not in {"user", "assistant"}:
             raise ValueError("Conversation message role must be user or assistant.")
+        if status not in {"thinking", "searching", "generating", "finalizing", "completed", "interrupted", "failed", "cancelled", "incomplete"}:
+            raise ValueError("Unsupported conversation message status.")
         if temporary:
             return False
         now = utc_now()
@@ -145,9 +151,9 @@ class SQLiteStore:
                     (conversation_id, user_identifier, title, now, now),
                 )
             result = conn.execute(
-                "INSERT OR IGNORE INTO conversation_messages(conversation_id,message_key,role,content,created_at) "
-                "SELECT ?,?,?,?,? WHERE EXISTS(SELECT 1 FROM conversations WHERE id=? AND user_identifier=?)",
-                (conversation_id, message_key, role, content, now, conversation_id, user_identifier),
+                "INSERT OR IGNORE INTO conversation_messages(conversation_id,message_key,role,content,status,created_at) "
+                "SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM conversations WHERE id=? AND user_identifier=?)",
+                (conversation_id, message_key, role, content, status, now, conversation_id, user_identifier),
             )
             conn.execute("UPDATE conversations SET updated_at=? WHERE id=? AND user_identifier=?", (now, conversation_id, user_identifier))
             if role == "user":
@@ -172,7 +178,7 @@ class SQLiteStore:
     def get_conversation_messages(self, conversation_id: str, user_identifier: str) -> list[dict[str, Any]]:
         with self.connect() as conn:
             rows = conn.execute(
-                "SELECT m.role,m.content,m.created_at,m.message_key FROM conversation_messages m "
+                "SELECT m.role,m.content,m.status,m.created_at,m.message_key FROM conversation_messages m "
                 "JOIN conversations c ON c.id=m.conversation_id "
                 "WHERE c.id=? AND c.user_identifier=? ORDER BY m.id",
                 (conversation_id, user_identifier),

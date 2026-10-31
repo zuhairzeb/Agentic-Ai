@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -21,8 +21,8 @@ from agent_loop import ToolCallingNotSupportedError
 from artifacts import load_project, load_project_version
 from agents import AgentFactory
 from config import BRANDING, Config
-from generation import generate_agent_with_fallback, generate_with_fallback
-from provider_router import configured_providers, default_model, provider_health
+from generation import IncompleteResponseError, InterruptedResponseError, ProvidersUnavailableError, generate_agent_with_fallback, generate_with_fallback
+from provider_router import configured_providers, current_request_id, default_model, provider_health
 from knowledge_base import knowledge_base
 from prompt_rules import EMAIL_WRITING_GUIDANCE, SOCIAPI_GOVERNANCE_GUIDANCE, is_email_writing_request
 from orchestrator import AgentOrchestrator
@@ -43,12 +43,44 @@ app = FastAPI(title=BRANDING.name)
 app.mount("/assets", StaticFiles(directory=ROOT / "web"), name="assets")
 
 
+def _extract_xlsx_text(raw: bytes) -> str:
+    from io import BytesIO
+    from zipfile import ZipFile
+    from openpyxl import load_workbook
+
+    with ZipFile(BytesIO(raw)) as archive:
+        if sum(item.file_size for item in archive.infolist()) > 50 * 1024 * 1024:
+            raise ValueError("The expanded spreadsheet is too large to read safely.")
+    workbook = load_workbook(BytesIO(raw), read_only=True, data_only=True)
+    pieces, consumed = [], 0
+    try:
+        for sheet in workbook.worksheets[:20]:
+            pieces.append(f"Sheet: {sheet.title}")
+            # Bound both the number of parsed cells and the resulting prompt size.
+            for row in sheet.iter_rows(max_row=100, max_col=50, values_only=True):
+                values = [str(value).strip() for value in row if value is not None and str(value).strip()]
+                if values:
+                    line = " | ".join(values)
+                    pieces.append(line)
+                    consumed += len(line) + 1
+                    if consumed >= 20000:
+                        break
+            if consumed >= 20000:
+                break
+    finally:
+        workbook.close()
+    text = "\n".join(pieces).strip()
+    if not text:
+        raise ValueError("No readable cell values were found in the spreadsheet.")
+    return text
+
+
 @app.post("/api/upload")
 async def upload_document(file: UploadFile = File(...)):
     name = Path(file.filename or "").name
     suffix = Path(name).suffix.lower()
-    if suffix not in {".txt", ".md", ".markdown", ".pdf", ".docx", ".csv"}:
-        raise HTTPException(400, "Upload a TXT, Markdown, CSV, DOCX, or PDF file.")
+    if suffix not in {".txt", ".md", ".markdown", ".pdf", ".docx", ".csv", ".xlsx"}:
+        raise HTTPException(400, "Upload a TXT, Markdown, CSV, DOCX, XLSX, or PDF file.")
     raw = await file.read(10 * 1024 * 1024 + 1)
     if len(raw) > 10 * 1024 * 1024:
         raise HTTPException(413, "Files must be 10 MB or smaller.")
@@ -66,6 +98,9 @@ async def upload_document(file: UploadFile = File(...)):
             if not text:
                 raise ValueError("No readable text was found in the document.")
             result = {"name": name, "text": text[:20000], "truncated": len(text) > 20000}
+        elif suffix == ".xlsx":
+            text = await asyncio.to_thread(_extract_xlsx_text, raw)
+            result = {"name": name, "text": text[:20000], "truncated": len(text) > 20000}
         else:
             tool_result = await tools.execute("extract_document", {"name": name, "content": raw}, permissions={"file_read"})
             if not tool_result.ok or not tool_result.data:
@@ -76,7 +111,77 @@ async def upload_document(file: UploadFile = File(...)):
         raise HTTPException(400, "I couldn't read that file. Please use a readable TXT, Markdown, or text-based PDF.") from exc
     return {"name": result["name"], "text": result["text"], "truncated": result["truncated"], "size_bytes": len(raw)}
 
+
+@app.post("/api/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    language: str = Form("auto"),
+):
+    """Transcribe a user-recorded clip with the configured Groq Whisper service."""
+    config = Config()
+    if not config.groq_api_key:
+        raise HTTPException(503, "Voice transcription needs GROQ_API_KEY configured on the server.")
+    if language not in {"auto", "ur", "en", "roman-ur"}:
+        raise HTTPException(400, "Choose Auto, Urdu, English, or Roman Urdu transcription.")
+    filename = Path(file.filename or "recording.webm").name
+    suffix = Path(filename).suffix.lower()
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    supported = {
+        ".webm": "audio/webm", ".ogg": "audio/ogg", ".mp4": "audio/mp4",
+        ".m4a": "audio/mp4", ".mp3": "audio/mpeg", ".wav": "audio/wav",
+        ".flac": "audio/flac", ".mpeg": "audio/mpeg", ".mpga": "audio/mpeg",
+    }
+    mime_type = supported.get(suffix)
+    if not mime_type or (content_type and not content_type.startswith("audio/") and content_type != "video/webm"):
+        raise HTTPException(400, "Use a browser recording in WebM, Ogg, MP4, WAV, MP3, or FLAC format.")
+    raw = await file.read(20 * 1024 * 1024 + 1)
+    if not raw:
+        raise HTTPException(400, "No audio was recorded. Try again and speak closer to the microphone.")
+    if len(raw) > 20 * 1024 * 1024:
+        raise HTTPException(413, "That recording is too large. Keep recordings under 20 MB.")
+
+    language_codes = {"ur": "ur", "en": "en", "auto": None, "roman-ur": None}
+    prompt = {
+        "ur": "Transcribe the speech verbatim in Urdu script. Keep spoken English words in English. Do not translate or add words.",
+        "en": "Transcribe the speech verbatim in English. Do not translate or add words.",
+        "auto": "Transcribe verbatim in the language and script spoken. For mixed Urdu and English, preserve both languages. Do not translate or add words.",
+        "roman-ur": "Transcribe verbatim. Write Urdu words in Roman Urdu and preserve spoken English words in English. Do not translate or add words.",
+    }[language]
+    from openai import AsyncOpenAI
+
+    client = AsyncOpenAI(
+        api_key=config.groq_api_key,
+        base_url="https://api.groq.com/openai/v1",
+        timeout=75.0,
+        max_retries=0,
+    )
+    try:
+        transcription_options = dict(
+            file=(filename, raw, mime_type),
+            model="whisper-large-v3",
+            prompt=prompt,
+            temperature=0.0,
+            response_format="json",
+        )
+        if language_codes[language]:
+            transcription_options["language"] = language_codes[language]
+        result = await client.audio.transcriptions.create(**transcription_options)
+        transcript = (result.text or "").strip()
+        if not transcript:
+            raise HTTPException(422, "No speech was recognized. Try again in a quieter place or select a language.")
+        return {"text": transcript, "model": "whisper-large-v3", "language": language}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Voice transcription failed (type=%s)", type(exc).__name__)
+        raise HTTPException(502, "Transcription failed. Check the Groq service connection and retry.") from exc
+    finally:
+        await client.close()
+
 TEMP_CHATS: dict[str, list[dict[str, str]]] = {}
+ACTIVE_CHAT_REQUESTS: dict[str, asyncio.Task] = {}
+RESERVED_CHAT_REQUEST_IDS: set[str] = set()
+CHAT_REQUEST_STATES: dict[str, dict[str, Any]] = {}
 DEFAULT_SETTINGS: dict[str, Any] = {
     "agent": "Auto", "provider": "Auto", "model_tier": "Fast",
     "response_style": "Normal", "language": "English", "temperature": 0.4,
@@ -95,6 +200,7 @@ class ChatRequest(BaseModel):
     uploaded_text: str = Field(default="", max_length=20000)
     uploaded_name: str = Field(default="", max_length=255)
     settings: dict[str, Any] = Field(default_factory=dict)
+    request_id: str = Field(default_factory=lambda: uuid.uuid4().hex, min_length=1, max_length=64)
 
 
 class SettingsUpdate(BaseModel):
@@ -763,7 +869,8 @@ async def update_conversation(thread_id: str, body: dict[str, Any]):
     if operation == "rename":
         store.rename_conversation(thread_id, USER, str(body.get("title", "")))
     elif operation in {"pin", "archive"}:
-        store.set_conversation_flag(thread_id, USER, operation, bool(body.get("enabled", True)))
+        flag = "pinned" if operation == "pin" else "archived"
+        store.set_conversation_flag(thread_id, USER, flag, bool(body.get("enabled", True)))
     else:
         raise HTTPException(400, "Unsupported chat operation")
     return _conversation(thread_id)
@@ -777,6 +884,24 @@ async def delete_conversation(thread_id: str):
     if not store.delete_conversation(thread_id, USER):
         raise HTTPException(404, "Chat not found")
     return {"deleted": True}
+
+
+@app.post("/api/chat/{request_id}/cancel")
+async def cancel_chat_request(request_id: str):
+    """Cancel only the active generation identified by this client's request ID."""
+    task = ACTIVE_CHAT_REQUESTS.get(request_id)
+    if task is None or task.done():
+        return {"cancelled": False}
+    task.cancel()
+    return {"cancelled": True}
+
+
+@app.get("/api/chat/{request_id}/status")
+async def get_chat_request_status(request_id: str):
+    state = CHAT_REQUEST_STATES.get(request_id)
+    if state is None:
+        return {"request_id": request_id, "state": "unknown", "partial": "", "label": "Request status is no longer available."}
+    return {key: value for key, value in state.items() if key != "updated_at"}
 
 
 @app.delete("/api/conversations/{thread_id}/messages")
@@ -803,6 +928,7 @@ async def delete_all_memories():
 
 @app.post("/api/chat")
 async def chat(body: ChatRequest):
+    request_id = re.sub(r"[^A-Za-z0-9_-]", "", body.request_id)[:64] or uuid.uuid4().hex
     text = body.message.strip()
     if not text:
         raise HTTPException(400, "Message cannot be empty")
@@ -849,10 +975,6 @@ async def chat(body: ChatRequest):
     retrieval_query = " ".join([previous for role, previous in history[-6:] if role == "user"] + [text])
     local_excerpts = knowledge_base.retrieve(retrieval_query, limit=4)
     search_provider = settings.get("web_search_provider", "Auto")
-    search_results = [] if body.uploaded_text else await search_if_needed(
-        retrieval_query, local_excerpts, settings.get("web_search_mode", "Auto"), None if search_provider == "Auto" else search_provider
-    )
-    messages = _messages(route, prompt_text, history, settings, temporary, current_project, search_results)
     msg_id = f"turn:{uuid.uuid4()}"
     if temporary:
         TEMP_CHATS[body.thread_id].append({"role": "user", "content": text, "created_at": ""})
@@ -861,15 +983,64 @@ async def chat(body: ChatRequest):
 
     async def events():
         queue: asyncio.Queue[tuple[str, Any]] = asyncio.Queue()
+        connected = True
+        sequence = 0
+        partial_tokens: list[str] = []
+
+        async def emit(kind: str, payload: Any):
+            nonlocal sequence
+            sequence += 1
+            request_state = CHAT_REQUEST_STATES.get(request_id)
+            if request_state is not None:
+                request_state["updated_at"] = asyncio.get_running_loop().time()
+                if kind in {"delta", "tool"}:
+                    request_state["state"] = "generating"
+                else:
+                    request_state["state"] = payload.get("state", kind) if isinstance(payload, dict) else kind
+                if kind == "delta" and isinstance(payload, str):
+                    request_state["partial"] += payload
+                if isinstance(payload, dict) and payload.get("label"):
+                    request_state["label"] = payload["label"]
+                elif kind == "tool" and isinstance(payload, dict):
+                    request_state["label"] = f"{payload.get('state', 'Using')} {payload.get('name', 'tool')}"
+            if connected:
+                await queue.put((kind, payload, sequence))
 
         async def on_token(token: str):
-            await queue.put(("token", token))
+            partial_tokens.append(token)
+            await emit("delta", token)
+
+        async def save_partial(status: str, content: str | None = None):
+            value = "".join(partial_tokens) if content is None else content
+            if not value:
+                return
+            if temporary:
+                TEMP_CHATS[body.thread_id].append({"role": "assistant", "content": value, "created_at": "", "status": status})
+            else:
+                store.save_conversation_message(body.thread_id, USER, "assistant", value, f"assistant:{msg_id}", status=status)
 
         async def on_fallback(provider: str):
-            await queue.put(("status", "Trying another available service..."))
+            await emit("provider_switch", {"state": "generating", "provider": provider, "label": "Provider unavailable. Trying another provider."})
+
+        async def on_search_progress(message: str):
+            await emit("status", {"state": "searching", "label": message})
+
+        async def on_tool_event(event: dict[str, Any]):
+            await emit("tool", event)
 
         async def run():
+            request_token = current_request_id.set(request_id)
             try:
+                await emit("start", {"state": "thinking", "label": "Thinking"})
+                search_results = [] if body.uploaded_text else await search_if_needed(
+                    retrieval_query,
+                    local_excerpts,
+                    settings.get("web_search_mode", "Auto"),
+                    None if search_provider == "Auto" else search_provider,
+                    progress=on_search_progress,
+                )
+                messages = _messages(route, prompt_text, history, settings, temporary, current_project, search_results)
+                await emit("status", {"state": "generating", "label": "Generating"})
                 permissions = {"math"} if route.key == "math" else {"code"} if route.key == "code" else set()
                 if settings.get("mcp_tools_enabled") and active_registry is not tools:
                     permissions.add("mcp")
@@ -877,7 +1048,7 @@ async def chat(body: ChatRequest):
                     context_token = set_artifact_conversation(body.thread_id) if route.key == "code" else None
                     try:
                         answer, served_provider, tool_steps = await asyncio.wait_for(
-                            generate_agent_with_fallback(providers, model_for, model_name_for, messages, on_token, on_fallback, active_registry, permissions=permissions, max_steps=plan.max_steps, tool_choice="required" if route.key == "code" and requires_artifact(text) else "auto"),
+                            generate_agent_with_fallback(providers, model_for, model_name_for, messages, on_token, on_fallback, active_registry, permissions=permissions, max_steps=plan.max_steps, tool_choice="required" if route.key == "code" and requires_artifact(text) else "auto", on_tool_event=on_tool_event, streaming=settings.get("streaming", True)),
                             timeout=plan.timeout_seconds,
                         )
                     finally:
@@ -889,6 +1060,7 @@ async def chat(body: ChatRequest):
                         timeout=plan.timeout_seconds,
                     )
                     tool_steps = ()
+                await emit("status", {"state": "finalizing", "label": "Finalizing"})
                 answer = re.sub(r"@[\w./\\-]+\.md\b", "", answer, flags=re.IGNORECASE)
                 if temporary:
                     TEMP_CHATS[body.thread_id].append({"role": "assistant", "content": answer, "created_at": ""})
@@ -903,28 +1075,67 @@ async def chat(body: ChatRequest):
                     artifact = load_project(body.thread_id)
                     if artifact:
                         artifact = {key: value for key, value in artifact.items() if key != "files"}
-                await queue.put(("done", {"thread_id": body.thread_id, "title": title, "agent": route.label, "agent_key": route.key, "provider": served_provider, "artifact": artifact}))
+                await emit("completed", {"state": "completed", "request_id": request_id, "thread_id": body.thread_id, "title": title, "agent": route.label, "agent_key": route.key, "provider": served_provider, "artifact": artifact})
+            except IncompleteResponseError as exc:
+                await save_partial("incomplete", exc.partial)
+                await emit("incomplete", {"state": "incomplete", "finish_reason": exc.finish_reason, "label": "Response incomplete: the provider reached its output limit."})
+            except InterruptedResponseError as exc:
+                await save_partial("interrupted", exc.partial)
+                await emit("interrupted", {"state": "interrupted", "label": "Connection interrupted. The generated text has been preserved."})
+            except asyncio.CancelledError:
+                await save_partial("cancelled")
+                await emit("cancelled", {"state": "cancelled", "label": "Generation cancelled. Generated text has been preserved."})
+                raise
             except Exception as exc:
-                logger.warning("Chat request failed (type=%s)", type(exc).__name__)
+                logger.warning("Chat request failed (request_id=%s thread_id=%s type=%s)", request_id, body.thread_id, type(exc).__name__)
+                await save_partial("failed")
                 if isinstance(exc, (asyncio.TimeoutError, TimeoutError)):
                     message = "The AI provider timed out. Check the connection or try another provider."
+                elif isinstance(exc, ProvidersUnavailableError) and exc.status in {401, 403}:
+                    message = f"AI provider authentication failed (HTTP {exc.status}). Check your provider configuration. Reference: {request_id}."
+                elif isinstance(exc, ProvidersUnavailableError) and exc.status == 429:
+                    retry = f" Try again in about {max(1, int(exc.retry_after + 0.999))} seconds." if exc.retry_after is not None else " Please try again shortly."
+                    message = f"AI provider rate limit reached (HTTP 429).{retry} Reference: {request_id}."
+                elif isinstance(exc, ProvidersUnavailableError) and exc.status is not None:
+                    message = f"AI providers could not complete this request (last HTTP {exc.status}). Reference: {request_id}."
+                elif isinstance(exc, ProvidersUnavailableError):
+                    message = f"No available AI provider could complete this request. Reference: {request_id}."
                 elif type(exc).__name__ in {"APIConnectionError", "ConnectError", "ConnectionError"}:
                     message = "Could not connect to the AI provider. Check the network or proxy and try again."
                 else:
                     message = "The AI provider request failed. Check your connection and try again."
-                await queue.put(("error", message))
+                await emit("failed", {"state": "failed", "message": message, "label": message})
             finally:
-                await queue.put(("eof", None))
+                current_request_id.reset(request_token)
+                if ACTIVE_CHAT_REQUESTS.get(request_id) is asyncio.current_task():
+                    ACTIVE_CHAT_REQUESTS.pop(request_id, None)
+                RESERVED_CHAT_REQUEST_IDS.discard(request_id)
+                if connected:
+                    await queue.put(("eof", None, sequence + 1))
 
         task = asyncio.create_task(run())
+        ACTIVE_CHAT_REQUESTS[request_id] = task
         try:
             while True:
-                kind, payload = await queue.get()
+                kind, payload, event_sequence = await queue.get()
                 if kind == "eof":
                     break
-                yield f"data: {json.dumps({'type': kind, 'value': payload}, ensure_ascii=False)}\n\n"
+                event_id = f"{request_id}:{event_sequence}"
+                yield f"id: {event_id}\ndata: {json.dumps({'request_id': request_id, 'event_id': event_id, 'type': kind, 'state': payload.get('state') if isinstance(payload, dict) else None, 'value': payload}, ensure_ascii=False)}\n\n"
         finally:
-            if not task.done():
-                task.cancel()
+            # A disconnected browser may be refreshing. Let its isolated task
+            # finish and persist; explicit Stop uses the request-ID cancel API.
+            connected = False
 
-    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    # Reserve synchronously before yielding the response so two requests that
+    # reuse an ID cannot replace each other's cancellation or stream registry.
+    if request_id in RESERVED_CHAT_REQUEST_IDS:
+        raise HTTPException(409, "This request ID is already active. Retry with a new request ID.")
+    RESERVED_CHAT_REQUEST_IDS.add(request_id)
+    CHAT_REQUEST_STATES[request_id] = {"request_id": request_id, "conversation_id": body.thread_id, "state": "thinking", "label": "Thinking", "partial": "", "updated_at": asyncio.get_running_loop().time()}
+    if len(CHAT_REQUEST_STATES) > 512:
+        stale = sorted(CHAT_REQUEST_STATES, key=lambda key: CHAT_REQUEST_STATES[key].get("updated_at", 0))[:-384]
+        for old_request in stale:
+            if old_request not in ACTIVE_CHAT_REQUESTS:
+                CHAT_REQUEST_STATES.pop(old_request, None)
+    return StreamingResponse(events(), media_type="text/event-stream", headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "X-Request-ID": request_id})

@@ -1,14 +1,74 @@
 import asyncio
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from fastapi import HTTPException
 
 from router import AGENTS
-from web_app import LibraryDocument, MemoryUpdate, _messages, add_library_document, add_saved_memory, edit_saved_memory
+from web_app import LibraryDocument, MemoryUpdate, _messages, add_library_document, add_saved_memory, app, edit_saved_memory
 
 
 class WebFrontendFeatureTests(unittest.TestCase):
+    def test_composer_menu_only_exposes_supported_tools_and_settings(self):
+        source = (Path(__file__).resolve().parents[1] / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('label: "Upload or add files"', source)
+        self.assertIn('label: "Web search"', source)
+        self.assertIn('label: "Agent"', source)
+        self.assertIn('label: "Model quality"', source)
+        self.assertIn('item.toggle ? "menuitemcheckbox" : "menuitem"', source)
+        self.assertIn("aria-activedescendant", source)
+        self.assertIn("No matching commands", source)
+        self.assertNotIn('label: "Take a screenshot"', source)
+
+    def test_voice_capture_uses_recorded_audio_not_browser_speech_recognition(self):
+        web_root = Path(__file__).resolve().parents[1] / "web"
+        source = (web_root / "app.js").read_text(encoding="utf-8")
+        markup = (web_root / "index.html").read_text(encoding="utf-8")
+        self.assertIn('fetch("/api/transcribe"', source)
+        self.assertNotIn("SpeechRecognition", source)
+        for element_id in ("voiceInput", "voiceRetry", "settingVoiceLanguage"):
+            self.assertIn(f'id="{element_id}"', markup)
+        for element_id in ("voiceStop", "voiceCancel", "voiceClear", "voiceLanguage", "voiceControls"):
+            self.assertNotIn(f'id="{element_id}"', markup)
+        self.assertIn('response.status === 404', source)
+
+    def test_voice_transcription_route_is_registered(self):
+        routes = {(method, route.path) for route in app.routes for method in getattr(route, "methods", set())}
+        self.assertIn(("POST", "/api/transcribe"), routes)
+
+    def test_composer_submit_guard_and_keyboard_behavior(self):
+        source = (Path(__file__).resolve().parents[1] / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('if (event.key === "Enter" && !event.shiftKey)', source)
+        self.assertIn("state.sending || state.submitting", source)
+        self.assertIn('button.disabled = !state.sending && (state.submitting || (!input.value.trim() && !state.uploaded))', source)
+        self.assertIn('if (state.sending) { const requestId = state.activeRequestId;', source)
+        self.assertIn('/api/chat/${encodeURIComponent(requestId)}/cancel', source)
+        self.assertIn('state.abortController?.abort(); return;', source)
+        self.assertIn('state.messages.push({ role: "assistant", content: "", prompt: content, status: "thinking"', source)
+        self.assertIn('message.content += typeof value === "string" ? value : ""', source)
+
+    def test_response_completion_requires_terminal_event_and_preserves_recovery_actions(self):
+        source = (Path(__file__).resolve().parents[1] / "web" / "app.js").read_text(encoding="utf-8")
+        self.assertIn('if (!terminalState) {', source)
+        self.assertIn('finishRequest("interrupted", "Connection interrupted.', source)
+        self.assertIn('event.type === "completed" || event.type === "done"', source)
+        self.assertIn('data-response-action="retry"', source)
+        self.assertIn('data-response-action="continue"', source)
+        self.assertIn('data-response-action="regenerate"', source)
+
+    def test_composer_uses_compact_inline_voice_and_shared_stream_button(self):
+        web_root = Path(__file__).resolve().parents[1] / "web"
+        markup = (web_root / "index.html").read_text(encoding="utf-8")
+        styles = (web_root / "style.css").read_text(encoding="utf-8")
+        self.assertIn('data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"', markup)
+        self.assertIn('id="recordingTimer"', markup)
+        self.assertNotIn('id="stopGeneration"', markup)
+        self.assertNotIn('id="voiceMeter"', markup)
+        self.assertIn('[hidden]{display:none!important}', styles)
+        self.assertIn('.composer:focus-within', styles)
+        self.assertIn('@media(prefers-reduced-motion:reduce){.recording-dot{animation:none!important}}', styles)
+
     def test_web_memory_api_accepts_safe_preferences(self):
         with patch("web_app.store.add_memory", return_value=42) as add_memory:
             result = asyncio.run(add_saved_memory(MemoryUpdate(content="I prefer concise replies")))

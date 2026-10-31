@@ -52,6 +52,7 @@ class AgentFactory:
                     google_api_key=self.config.google_api_key,
                     temperature=temperature if temperature is not None else (0.2 if route.key == "math" else 0.7),
                     timeout=15,
+                    max_output_tokens=self.config.max_output_tokens,
                     max_retries=0,
                 )
 
@@ -59,7 +60,7 @@ class AgentFactory:
                 from langchain_groq import ChatGroq
                 use_smart = model_tier == "Smart" or (model_tier is None and route.key in {"agent2", "math", "research"})
                 model = model_name or (self.config.groq_smart_model if use_smart else self.config.groq_fast_model)
-                return ChatGroq(model=model, api_key=self.config.groq_api_key, temperature=temperature if temperature is not None else 0.4, timeout=30, max_retries=0)
+                return ChatGroq(model=model, api_key=self.config.groq_api_key, temperature=temperature if temperature is not None else 0.4, timeout=30, max_tokens=self.config.max_output_tokens, max_retries=0)
 
             from langchain_openai import ChatOpenAI
             use_smart = model_tier == "Smart" or (model_tier is None and route.key in {"agent2", "math", "research"})
@@ -72,7 +73,7 @@ class AgentFactory:
                 return ChatOpenAI(
                     model=model, api_key=self.config.cloudflare_api_token,
                     base_url=f"https://api.cloudflare.com/client/v4/accounts/{self.config.cloudflare_account_id}/ai/v1",
-                    temperature=temperature if temperature is not None else 0.4, timeout=30, max_retries=0,
+                    temperature=temperature if temperature is not None else 0.4, timeout=30, max_tokens=self.config.max_output_tokens, max_retries=0,
                 )
             if provider == "openrouter":
                 model = "openrouter/free" if self.config.free_only else (model_name or self.config.openrouter_model)
@@ -82,7 +83,7 @@ class AgentFactory:
                     model=model, api_key=self.config.openrouter_api_key,
                     base_url="https://openrouter.ai/api/v1",
                     default_headers={"HTTP-Referer": "https://sociapis.vercel.app", "X-Title": "Sociapi Assistant"},
-                    temperature=temperature if temperature is not None else 0.4, timeout=30, max_retries=0,
+                    temperature=temperature if temperature is not None else 0.4, timeout=30, max_tokens=self.config.max_output_tokens, max_retries=0,
                 )
             if provider == "ollama":
                 base_url = self.config.ollama_base_url.rstrip("/")
@@ -90,7 +91,7 @@ class AgentFactory:
                     base_url += "/v1"
                 return ChatOpenAI(
                     model=model_name or self.config.ollama_model, api_key="ollama", base_url=base_url,
-                    temperature=temperature if temperature is not None else 0.4, timeout=45, max_retries=0,
+                    temperature=temperature if temperature is not None else 0.4, timeout=45, max_tokens=self.config.max_output_tokens, max_retries=0,
                 )
             raise ValueError(f"Unknown LLM provider: {provider}")
         except ImportError as exc:

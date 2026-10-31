@@ -44,9 +44,10 @@ class SQLiteStoreTests(unittest.TestCase):
     def test_conversation_messages_search_and_flags_survive_reopen_without_duplicates(self):
         self.assertTrue(self.store.save_conversation_message("thread-a", "alice", "user", "Explain SQLite transactions", "user-1"))
         self.assertFalse(self.store.save_conversation_message("thread-a", "alice", "user", "duplicate", "user-1"))
-        self.store.save_conversation_message("thread-a", "alice", "assistant", "A transaction groups database changes.", "assistant-1")
+        self.store.save_conversation_message("thread-a", "alice", "assistant", "A transaction groups database changes.", "assistant-1", status="incomplete")
         reopened = SQLiteStore(self.store.path)
         self.assertEqual([row["role"] for row in reopened.get_conversation_messages("thread-a", "alice")], ["user", "assistant"])
+        self.assertEqual(reopened.get_conversation_messages("thread-a", "alice")[1]["status"], "incomplete")
         self.assertEqual(reopened.search_conversations("alice", "transactions")[0]["id"], "thread-a")
         self.assertEqual(reopened.search_conversations("bob", "transactions"), [])
         self.assertTrue(reopened.rename_conversation("thread-a", "alice", "Transaction notes"))
@@ -56,6 +57,22 @@ class SQLiteStoreTests(unittest.TestCase):
         self.assertTrue(reopened.set_conversation_flag("thread-a", "alice", "archived", True))
         self.assertEqual(reopened.list_conversations("alice"), [])
         self.assertEqual(reopened.list_conversations("alice", archived=True)[0]["id"], "thread-a")
+
+    def test_existing_message_table_is_migrated_with_completed_default(self):
+        import sqlite3
+        legacy = Path(self.temp.name) / "legacy.sqlite3"
+        conn = sqlite3.connect(legacy)
+        with conn:
+            conn.executescript("""
+                CREATE TABLE conversations (id TEXT PRIMARY KEY,user_identifier TEXT NOT NULL,title TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,pinned INTEGER NOT NULL DEFAULT 0,archived INTEGER NOT NULL DEFAULT 0,temporary INTEGER NOT NULL DEFAULT 0);
+                CREATE TABLE conversation_messages (id INTEGER PRIMARY KEY AUTOINCREMENT,conversation_id TEXT NOT NULL,message_key TEXT NOT NULL,role TEXT NOT NULL,content TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(conversation_id,message_key));
+                INSERT INTO conversations VALUES ('legacy','alice','Old chat','now','now',0,0,0);
+                INSERT INTO conversation_messages(conversation_id,message_key,role,content,created_at) VALUES ('legacy','a1','assistant','Old answer','now');
+            """)
+        conn.close()
+        reopened = SQLiteStore(legacy)
+        rows = reopened.get_conversation_messages("legacy", "alice")
+        self.assertEqual(rows[0]["status"], "completed")
 
     def test_temporary_conversations_do_not_persist_new_turns(self):
         self.store.save_conversation_message("thread-temp", "alice", "user", "earlier turn", "u1")

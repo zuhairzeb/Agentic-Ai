@@ -19,7 +19,7 @@ from agents import AgentFactory
 from artifacts import generate_artifacts, load_project, save_project
 from config import BRANDING, Config, apply_branding
 from agent_loop import ToolCallingNotSupportedError
-from generation import EmptyResponseError, generate_agent_with_fallback, generate_with_fallback
+from generation import EmptyResponseError, IncompleteResponseError, InterruptedResponseError, ProvidersUnavailableError, generate_agent_with_fallback, generate_with_fallback
 from provider_router import configured_providers, default_model, provider_health
 from knowledge_base import knowledge_base
 from prompt_rules import EMAIL_WRITING_GUIDANCE, SOCIAPI_GOVERNANCE_GUIDANCE, is_email_writing_request
@@ -1118,6 +1118,7 @@ async def _run_turn(user_text: str, command: str | None = None, regenerate: bool
                         permissions=task_permissions,
                         max_steps=plan.max_steps,
                         tool_choice="required" if route.key == "code" and requires_artifact(current_text) else "auto",
+                        streaming=settings.get("streaming", True),
                     ),
                     timeout=plan.timeout_seconds,
                 )
@@ -1237,31 +1238,54 @@ async def _run_turn(user_text: str, command: str | None = None, regenerate: bool
         task_run.status = "completed"
         cl.user_session.set("last_failed_turn", None)
     except asyncio.CancelledError:
-        reply.content = "Generation stopped. The incomplete response was not saved."
+        reply.content = response
+        if response:
+            store.save_conversation_message(
+                conversation_id, _user_identifier(), "assistant", response,
+                f"assistant:partial:{user_key}", temporary, status="cancelled",
+            )
+            if not regenerate and (not history or history[-1] != ("assistant", response)):
+                history.append(("assistant", response))
+                cl.user_session.set("history", history[-40:])
+            reply.actions = [cl.Action(name="continue_response", label="Continue", icon="play", payload={}), _conversation_options_action()]
         await reply.update()
-        cl.user_session.set("latest_task_status", {"status": "Stopped", "summary": "Generation was cancelled."})
-        raise
+        cl.user_session.set("latest_task_status", {"status": "Cancelled", "summary": "Generation was cancelled; partial text was preserved."})
     except Exception as exc:
         status = getattr(getattr(exc, "response", None), "status_code", None)
         logger.error("All configured provider attempts failed (type=%s status=%s)", type(exc).__name__, status or "unknown")
-        suffix = str(exc) if isinstance(exc, ToolCallingNotSupportedError) else _provider_error_message(exc, attempts=len(providers))
+        if isinstance(exc, IncompleteResponseError):
+            response = exc.partial or response
+            result_status, suffix = "incomplete", "Response incomplete: the provider reached its output limit. You can continue or retry."
+        elif isinstance(exc, InterruptedResponseError):
+            response = exc.partial or response
+            result_status, suffix = "interrupted", "Connection interrupted. Generated text has been preserved; you can continue or retry."
+        else:
+            result_status = "failed"
+            suffix = str(exc) if isinstance(exc, ToolCallingNotSupportedError) else _provider_error_message(exc, attempts=len(providers))
         reply.content = (response + "\n\n" + suffix) if response else suffix
         cl.user_session.set("last_failed_turn", {"text": current_text, "command": command, "message_id": user_key})
         reply.actions = [cl.Action(name="retry_response", label="Retry", icon="rotate-cw", payload={}), _conversation_options_action()]
+        if response:
+            reply.actions.insert(1, cl.Action(name="continue_response", label="Continue", icon="play", payload={}))
         await reply.update()
-        cl.user_session.set("latest_task_status", {"status": "Failed", "summary": "Provider error; use Retry or change provider in Settings."})
+        cl.user_session.set("latest_task_status", {"status": result_status.title(), "summary": suffix})
         if not regenerate:
             if not history or history[-1] != ("user", current_text):
                 history.append(("user", current_text))
             if response:
                 history.append(("assistant", response))
             cl.user_session.set("history", history[-40:])
+        if response:
+            store.save_conversation_message(
+                conversation_id, _user_identifier(), "assistant", response,
+                f"assistant:partial:{user_key}", temporary, status=result_status,
+            )
     finally:
         cl.user_session.set("generation_task", None)
 
 
 def _provider_error_message(exc: Exception, attempts: int = 2) -> str:
-    status = getattr(getattr(exc, "response", None), "status_code", None)
+    status = exc.status if isinstance(exc, ProvidersUnavailableError) else getattr(getattr(exc, "response", None), "status_code", None)
     name = type(exc).__name__.lower()
     subject = "The selected provider" if attempts == 1 else "Both configured providers" if attempts == 2 else "The configured providers"
     if isinstance(exc, EmptyResponseError):
@@ -1274,6 +1298,8 @@ def _provider_error_message(exc: Exception, attempts: int = 2) -> str:
         return f"The model for {subject.lower()} was not found. Check the model name and account access."
     if status == 429 or "ratelimit" in name or "resourceexhausted" in name:
         return f"{subject} is rate-limited right now. Wait a bit and try again."
+    if status in {401, 403} or "authentication" in name or "unauthorized" in name:
+        return f"{subject} authentication failed. Check the provider configuration and retry."
     if status == 503 or status == 502 or "unavailable" in name:
         return f"{subject} is temporarily unavailable. Wait a moment and retry."
     if "timeout" in name or "deadline" in name or "connect" in name:
@@ -1387,6 +1413,11 @@ async def regenerate_response(action: cl.Action):
 @cl.action_callback("retry_response")
 async def retry_response(action: cl.Action):
     await _run_turn("", retry_failed=True)
+
+
+@cl.action_callback("continue_response")
+async def continue_response(action: cl.Action):
+    await _run_turn("Continue the previous response from where it stopped. Do not repeat the text already written.")
 
 
 @cl.action_callback("open_conversation_options")

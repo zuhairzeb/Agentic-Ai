@@ -3,81 +3,83 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#f6faf8" />
+  <meta name="theme-color" content="#f4f5f9" />
   <title>Morrow</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/assets/style.css?v=20261030-platform" />
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;600;700&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/assets/style.css?v=20261031-response-status-v8" />
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
-  <script defer src="/assets/app.js?v=20261030-platform"></script>
+  <script defer src="/assets/app.js?v=20261031-response-status-v8"></script>
 </head>
 <body>
   <div class="app-shell">
     <aside class="sidebar" id="sidebar">
       <div class="brand-row">
         <div class="brand-mark" aria-hidden="true"><svg viewBox="0 0 32 32" focusable="false"><path d="M6 24V8l10 11L26 8v16" /></svg></div>
-        <div class="brand-copy"><div id="brandName" class="brand-name">Morrow</div><div class="brand-caption">Answers and useful builds</div></div>
-        <button class="icon-button mobile-close" id="closeSidebar" aria-label="Close sidebar">×</button>
+        <div class="brand-copy"><div id="brandName" class="brand-name">Morrow</div></div>
+        <button class="icon-button mobile-close" id="closeSidebar" aria-label="Close sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button>
       </div>
 
       <div class="sidebar-actions">
-        <button class="side-action primary-action" id="newChat"><span class="action-icon">＋</span><span>New chat</span><kbd>Ctrl K</kbd></button>
-        <button class="side-action" id="temporaryChat"><span class="action-icon">◌</span><span>Temporary chat</span><span class="live-dot" id="temporaryDot"></span></button>
-        <button class="side-action" id="openTraining"><span class="action-icon">✳</span><span>AI Training Center</span></button>
+        <button class="side-action primary-action" id="newChat"><span class="action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><span>New chat</span><kbd>Ctrl K</kbd></button>
+        <button class="side-action" id="temporaryChat" type="button" aria-pressed="false"><span class="action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><span>Temporary chat</span><span class="live-dot" id="temporaryDot"></span></button>
+        <button class="side-action" id="openTraining"><span class="action-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v4m0 10v4M3 12h4m10 0h4M5.64 5.64l2.83 2.83m7.06 7.06 2.83 2.83m0-12.72-2.83 2.83m-7.06 7.06-2.83 2.83"/><circle cx="12" cy="12" r="3"/></svg></span><span>AI Training Center</span></button>
       </div>
 
-      <div class="history-heading"><span>Your chats</span><button class="icon-button small" id="toggleArchived" title="Show archived chats">•••</button></div>
-      <label class="search-box"><span>⌕</span><input id="searchChats" type="search" placeholder="Search chats" autocomplete="off" /></label>
+      <div class="history-heading"><span>Chats</span><button class="icon-button small" id="toggleArchived" title="Show archived chats" aria-label="Show archived chats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5h.01M12 12h.01M12 19h.01"/></svg></button></div>
+      <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input id="searchChats" type="search" placeholder="Search chats" autocomplete="off" /><button class="search-clear" id="clearChatSearch" type="button" aria-label="Clear search" title="Clear search" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></label>
       <div id="chatList" class="chat-list"><div class="list-loading">Loading your chats…</div></div>
 
       <div class="sidebar-footer">
-        <button class="side-action settings-action" id="openSettings"><span class="action-icon">⚙</span><span>Settings</span><span class="settings-shortcut">Preferences</span></button>
-        <div class="profile-row"><div class="profile-avatar">Z</div><div class="profile-copy"><strong id="profileName">Local workspace</strong><span>Private on this device</span></div><span class="profile-menu">•••</span></div>
+        <div class="profile-row"><div class="profile-avatar">Z</div><div class="profile-copy"><strong id="profileName">Local workspace</strong></div><button class="icon-button profile-settings" id="openSettings" type="button" aria-label="Settings" title="Settings"><span class="settings-flaticon" aria-hidden="true"></span></button></div>
       </div>
     </aside>
     <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
 
     <main class="main-panel">
       <header class="topbar">
-        <button class="icon-button menu-toggle" id="menuToggle" aria-label="Toggle sidebar" title="Toggle sidebar">☰</button>
+        <button class="icon-button menu-toggle" id="menuToggle" aria-label="Toggle sidebar" title="Toggle sidebar"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg></button>
         <div class="topbar-context"><span id="chatTitle">New chat</span><span class="title-chevron">⌄</span></div>
         <div class="topbar-right">
-          <button class="top-control" id="temporaryChatTop" type="button" aria-label="Start a temporary chat">Temporary chat</button>
-          <button class="top-control" id="agentSelectButton"><span id="agentLabel">Auto</span><span class="title-chevron">⌄</span></button>
+          <button class="top-control theme-toggle" id="themeToggle" type="button" aria-label="Switch theme" title="Switch theme"><svg class="theme-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg><svg class="theme-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5 8.5 8.5 0 1 0 20.5 14.5Z"/></svg></button>
+          <button class="top-control temporary-top-icon" id="temporaryChatTop" type="button" aria-label="Start a temporary chat" aria-pressed="false" title="Temporary chat"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
+          <button class="top-control agent-control" id="agentSelectButton" title="Choose an assistant"><span id="agentLabel">Auto</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg></button>
         </div>
       </header>
 
       <section class="conversation" id="conversation">
         <div id="welcome" class="welcome-screen">
-          <div class="welcome-orb" aria-hidden="true">M</div>
-          <div class="eyebrow">A workspace for useful work</div>
-          <h1 id="welcomeTitle" aria-label="Welcome Back"></h1>
-          <p class="welcome-description" id="welcomeDescription">Ask a question, explore an idea, or build something you can use.</p>
+          <div class="welcome-orb" aria-hidden="true"></div>
+          <h1 id="welcomeTitle" aria-label="Good morning"></h1>
+          <p class="welcome-description" id="welcomeDescription">A clear place to think, create, and move forward.</p>
           <div class="starter-grid">
-            <button class="starter-card" data-prompt="Help me write or rewrite: "><span class="starter-symbol violet">✎</span><span><strong>Write something</strong><small>Draft, edit, or find the right words</small></span><span class="card-arrow">↗</span></button>
-            <button class="starter-card" data-prompt="Research and synthesize findings on: "><span class="starter-symbol blue">⌕</span><span><strong>Explore a topic</strong><small>Understand something in depth</small></span><span class="card-arrow">↗</span></button>
-            <button class="starter-card" data-prompt="Analyze this and explain the result: "><span class="starter-symbol amber">∑</span><span><strong>Analyze a problem</strong><small>Check numbers and reason it through</small></span><span class="card-arrow">↗</span></button>
-            <button class="starter-card" data-prompt="Create an interactive web app for: "><span class="starter-symbol mint">⌘</span><span><strong>Build an idea</strong><small>Turn a prompt into working code</small></span><span class="card-arrow">↗</span></button>
+            <button class="starter-card" data-prompt="Help me write or rewrite: " data-agent="Writing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m16 4 4 4M4 20l4-.8L19 8a2.8 2.8 0 0 0-4-4L4.8 15.2 4 20Z"/></svg><span><strong>Write</strong></span></button>
+            <button class="starter-card" data-prompt="Research and synthesize findings on: " data-agent="Research"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><span><strong>Explore</strong></span></button>
+            <button class="starter-card" data-prompt="Analyze this and explain the result: " data-agent="Math"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14M5 12h14M5 19h14M9 3v4m6 3v4m-6 3v4"/></svg><span><strong>Analyze</strong></span></button>
+            <button class="starter-card" data-prompt="Create an interactive web app for: " data-agent="Code"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 8-4 4 4 4m8-8 4 4-4 4m-3-10-2 12"/></svg><span><strong>Build</strong></span></button>
           </div>
         </div>
         <div id="messages" class="messages" aria-live="polite"></div>
       </section>
 
       <footer class="composer-area">
-        <div id="slashMenu" class="slash-menu" role="listbox" aria-label="Chat commands" hidden></div>
+        <div id="slashMenu" class="slash-menu" role="menu" aria-label="Composer menu" hidden></div>
         <div id="uploadStatus" class="upload-status" role="status" aria-live="polite" hidden></div>
         <form class="composer" id="chatForm">
-          <input id="fileInput" type="file" accept=".txt,.md,.markdown,.pdf,text/plain,text/markdown,application/pdf" hidden />
-          <div id="dropOverlay" class="drop-overlay" aria-hidden="true"><span class="drop-icon">↑</span><strong>Drop your file to attach</strong><small>TXT, Markdown, or PDF · up to 10 MB</small></div>
-          <textarea id="messageInput" rows="1" placeholder="Message your assistant…" aria-label="Message your assistant"></textarea>
+          <input id="fileInput" type="file" accept=".txt,.md,.markdown,.pdf,.docx,.csv,.xlsx,text/plain,text/markdown,application/pdf" hidden />
+          <div id="dropOverlay" class="drop-overlay" aria-hidden="true"><span class="drop-icon">↑</span><strong>Drop your file to attach</strong><small>TXT, Markdown, PDF, DOCX, CSV, or XLSX · up to 10 MB</small></div>
+          <div class="composer-input-wrap">
+            <div id="recordingStatus" class="recording-status" role="status" aria-live="polite" hidden><span class="recording-indicator"><i class="recording-dot" aria-hidden="true"></i><span>Listening</span><time id="recordingTimer">0:00</time></span><span id="recordingMessage"></span></div>
+            <textarea id="messageInput" rows="1" placeholder="Ask Morrow anything" aria-label="Ask Morrow anything" data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false"></textarea>
+          </div>
           <div class="composer-toolbar">
-            <div class="composer-left"><button id="attachFile" class="attach-button" type="button" aria-label="Upload a file" title="Upload a TXT, Markdown, or PDF"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v5h14v-5"/></svg><span>Attach files</span></button><span class="composer-hint">Type / for tools | Enter to send</span></div>
-            <div class="composer-actions"><span id="recordingStatus" role="status" aria-live="polite" hidden></span><button id="voiceInput" class="attach-button voice-button" type="button" aria-label="Start voice input" title="Voice input" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"></path></svg></button><button class="stop-button" id="stopGeneration" type="button" hidden>Stop</button><button class="send-button" id="sendButton" type="submit" aria-label="Send message"><span>↑</span></button></div>
+            <div class="composer-left"><button id="attachFile" class="attach-button" type="button" aria-label="Upload files" title="Upload files"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button><span class="composer-hint">Press enter to send · shift + enter for a new line</span></div>
+            <div class="composer-actions"><button id="voiceRetry" class="voice-retry-button" type="button" hidden>Retry</button><button id="voiceInput" class="attach-button voice-button" type="button" aria-label="Start voice recording" title="Record voice input"><svg class="mic-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="12" rx="3"></rect><path d="M5 11a7 7 0 0 0 14 0M12 18v3m-4 0h8"></path></svg><svg class="voice-stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"></rect></svg></button><button class="send-button" id="sendButton" type="submit" aria-label="Send message" title="Send message" disabled><svg class="send-arrow-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6"/></svg><svg class="send-stop-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="1.5"/></svg></button></div>
           </div>
         </form>
-        <div class="disclaimer">AI can make mistakes. Check important details.</div>
+        <div class="disclaimer">Morrow can make mistakes. Check important details.</div>
       </footer>
     </main>
     <aside class="preview-panel" id="previewPanel" aria-label="Code workspace" aria-hidden="true">
@@ -119,33 +121,47 @@
 
   <div class="modal-backdrop" id="settingsBackdrop" aria-hidden="true">
     <section class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
-      <header class="settings-header"><div><div class="eyebrow">PERSONALIZE</div><h2 id="settingsTitle">Settings</h2><p>Choose how your assistant works.</p></div><button class="icon-button" id="closeSettings" aria-label="Close settings">×</button></header>
+      <header class="settings-header"><div><div class="eyebrow">PERSONALIZE</div><h2 id="settingsTitle">Settings</h2><p>Choose how your assistant works.</p></div><button class="icon-button" id="closeSettings" aria-label="Close settings"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header>
       <div class="settings-content">
-        <label class="setting-row"><span><strong>Your name</strong><small>Used in your welcome message and profile</small></span><input id="settingName" class="name-input" type="text" maxlength="60" autocomplete="name" placeholder="Your name" /></label>
-        <label class="setting-row"><span><strong>Assistant</strong><small>Choose who answers your messages</small></span><select id="settingAgent"><option>Auto</option><option>General</option><option>Code</option><option>Math</option><option>Writing</option><option>Research</option><option>Agent 1</option><option>Agent 2</option></select></label>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Profile</h3>
+          <label class="setting-row"><span><strong>Your name</strong><small>Used in your welcome message and profile</small></span><input id="settingName" class="name-input" type="text" maxlength="60" autocomplete="name" placeholder="Your name" /></label>
+        </section>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Assistant</h3>
+          <label class="setting-row"><span><strong>Assistant</strong><small>Choose who answers your messages</small></span><select id="settingAgent"><option>Auto</option><option>General</option><option>Code</option><option>Math</option><option>Writing</option><option>Research</option><option>Agent 1</option><option>Agent 2</option></select></label>
           <label class="setting-row"><span><strong>Provider</strong><small>Choose a preferred provider; eligible providers can take over after an error</small></span><select id="settingProvider"><option>Auto</option><option>Gemini</option><option>Groq</option><option>Cloudflare Workers AI</option><option>OpenRouter free</option><option>Ollama</option></select></label>
-        <label class="setting-row"><span><strong>Model</strong><small>Use the provider default or select a model</small></span><select id="settingModel"><option>Auto (provider default)</option></select></label>
-        <label class="setting-row"><span><strong>Model quality</strong><small>Trade speed for a more considered answer</small></span><select id="settingTier"><option>Fast</option><option>Smart</option></select></label>
-        <label class="setting-row"><span><strong>Response style</strong><small>Set the usual answer length</small></span><select id="settingStyle"><option>Short</option><option>Normal</option><option>Detailed</option></select></label>
-        <label class="setting-row"><span><strong>Reply language</strong><small>Choose the default response language</small></span><select id="settingLanguage"><option>English</option><option>Urdu</option><option>Roman Urdu</option></select></label>
-        <label class="setting-row setting-row-stack"><span><strong>Custom instructions</strong><small>Personal guidance for relevant answers</small></span><textarea id="settingInstructions" maxlength="4000" placeholder="Tell Morrow how you prefer it to respond..."></textarea></label>
-        <label class="setting-row"><span><strong>Creativity</strong><small>Lower is more predictable; higher is more varied</small></span><input id="settingTemperature" type="range" min="0" max="1" step="0.1" /></label>
-        <label class="setting-row"><span><strong>Stream responses</strong><small>Show the answer as it is being generated</small></span><input id="settingStreaming" class="switch" type="checkbox" checked /></label>
-        <label class="setting-row"><span><strong>Voice responses</strong><small>Read assistant replies aloud when supported by your browser</small></span><input id="settingVoice" class="switch" type="checkbox" /></label>
-        <label class="setting-row"><span><strong>Use enabled MCP tools in chats</strong><small>Only servers you enabled in the Training Center are available</small></span><input id="settingMcpTools" class="switch" type="checkbox" /></label>
-        <label class="setting-row"><span><strong>Saved preferences</strong><small>Use preferences you explicitly asked to remember</small></span><input id="settingMemory" class="switch" type="checkbox" /></label>
-        <label class="setting-row"><span><strong>Web search</strong><small>Search current public information automatically or on every question</small></span><select id="settingWebSearch"><option>Auto</option><option>Always</option><option>Off</option></select></label>
-        <label class="setting-row"><span><strong>Search provider</strong><small>Serper or Tavily falls back to DuckDuckGo when unavailable</small></span><select id="settingSearchProvider"><option>Auto</option><option>Serper</option><option>Tavily</option><option>DuckDuckGo</option></select></label>
-        <div class="setting-note"><span>◉</span><p>Temporary chats are never saved to history and do not use saved preferences.</p></div>
+          <label class="setting-row"><span><strong>Model</strong><small>Use the provider default or select a model</small></span><select id="settingModel"><option>Auto (provider default)</option></select></label>
+          <label class="setting-row"><span><strong>Model quality</strong><small>Trade speed for a more considered answer</small></span><select id="settingTier"><option>Fast</option><option>Smart</option></select></label>
+          <label class="setting-row"><span><strong>Response style</strong><small>Set the usual answer length</small></span><select id="settingStyle"><option>Short</option><option>Normal</option><option>Detailed</option></select></label>
+          <label class="setting-row"><span><strong>Reply language</strong><small>Choose the default response language</small></span><select id="settingLanguage"><option>English</option><option>Urdu</option><option>Roman Urdu</option></select></label>
+          <label class="setting-row"><span><strong>Voice transcription</strong><small>Choose Urdu, English, Roman Urdu, or automatic language detection</small></span><select id="settingVoiceLanguage"><option value="auto">Automatic</option><option value="ur">Urdu</option><option value="en">English</option><option value="roman-ur">Roman Urdu</option></select></label>
+          <label class="setting-row"><span><strong>Web search</strong><small>Search current public information automatically or on every question</small></span><select id="settingWebSearch"><option>Auto</option><option>Always</option><option>Off</option></select></label>
+          <label class="setting-row"><span><strong>Search provider</strong><small>Serper or Tavily falls back to DuckDuckGo when unavailable</small></span><select id="settingSearchProvider"><option>Auto</option><option>Serper</option><option>Tavily</option><option>DuckDuckGo</option></select></label>
+          <label class="setting-row setting-row-stack"><span><strong>Custom instructions</strong><small>Personal guidance for relevant answers</small></span><textarea id="settingInstructions" maxlength="4000" placeholder="Tell Morrow how you prefer it to respond..."></textarea></label>
+          <label class="setting-row"><span><strong>Creativity</strong><small>Lower is more predictable; higher is more varied</small></span><input id="settingTemperature" type="range" min="0" max="1" step="0.1" /></label>
+          <label class="setting-row"><span><strong>Stream responses</strong><small>Show the answer as it is being generated</small></span><input id="settingStreaming" class="switch" type="checkbox" checked /></label>
+          <label class="setting-row"><span><strong>Voice responses</strong><small>Read assistant replies aloud when supported by your browser</small></span><input id="settingVoice" class="switch" type="checkbox" /></label>
+          <label class="setting-row"><span><strong>Use enabled MCP tools in chats</strong><small>Only servers you enabled in the Training Center are available</small></span><input id="settingMcpTools" class="switch" type="checkbox" /></label>
+        </section>
+        <section class="settings-section">
+          <h3 class="settings-section-title">Appearance</h3>
+          <div class="setting-row"><span><strong>Theme</strong><small>Use the sun or moon button in the top bar to switch themes</small></span></div>
+        </section>
+        <section class="settings-section settings-data-section">
+          <h3 class="settings-section-title">Data</h3>
+          <label class="setting-row"><span><strong>Saved preferences</strong><small>Use preferences you explicitly asked to remember</small></span><input id="settingMemory" class="switch" type="checkbox" /></label>
+          <div class="setting-note"><span aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><p>Temporary chats are never saved to history and do not use saved preferences.</p></div>
+          <section class="data-controls" aria-label="Manage your data"><h4>Manage your data</h4><p>Remove saved conversations or preferences from this device.</p><div class="data-delete-actions"><button type="button" class="data-delete-button" id="deleteAllChats"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6"/></svg>Delete all chats</button><button type="button" class="data-delete-button" id="deleteAllMemory"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18m-2 0-.9 14H5.9L5 6m4 0V4h6v2m-5 4v6m4-6v6"/></svg>Delete saved memory</button></div></section>
+        </section>
       </div>
-        <section class="data-controls" aria-label="Data controls"><h3>Manage your data</h3><p>Remove saved conversations or preferences from this device.</p><button type="button" class="data-delete-button" id="deleteAllChats">Delete all chats</button><button type="button" class="data-delete-button" id="deleteAllMemory">Delete saved memory</button></section>
       <footer class="settings-footer"><span id="settingsSaved" class="settings-saved">Changes save to this device</span><button class="save-button" id="saveSettings">Save settings</button></footer>
     </section>
   </div>
 
   <div class="modal-backdrop" id="trainingBackdrop" aria-hidden="true">
     <section class="settings-panel training-panel" role="dialog" aria-modal="true" aria-labelledby="trainingTitle">
-      <header class="settings-header"><div><div class="eyebrow">EXTEND MORROW</div><h2 id="trainingTitle">AI Training Center</h2><p>Add knowledge and instructions. This does not fine-tune the model.</p></div><button class="icon-button" id="closeTraining" aria-label="Close Training Center">×</button></header>
+      <header class="settings-header"><div><div class="eyebrow">EXTEND MORROW</div><h2 id="trainingTitle">AI Training Center</h2><p>Add knowledge and instructions. This does not fine-tune the model.</p></div><button class="icon-button" id="closeTraining" aria-label="Close Training Center"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 6-12 12M6 6l12 12"/></svg></button></header>
       <div class="training-content">
         <section class="training-section"><h3>Knowledge sources</h3><p>Uploaded sources are searchable context (RAG); they do not retrain the model.</p>
           <form id="knowledgeUploadForm" class="platform-form"><input id="knowledgeFile" type="file" accept=".txt,.md,.markdown,.csv,.docx,.pdf" required /><button class="save-button" type="submit">Add document</button></form>

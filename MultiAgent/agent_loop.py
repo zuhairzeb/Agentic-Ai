@@ -24,6 +24,20 @@ class ToolCallingNotSupportedError(RuntimeError):
     """The selected model has not been verified for native tool calling."""
 
 
+class AgentResponseIncompleteError(RuntimeError):
+    def __init__(self, partial: str, finish_reason: str):
+        super().__init__("The model stopped before completing its response.")
+        self.partial = partial
+        self.finish_reason = finish_reason
+
+
+class AgentResponseInterruptedError(RuntimeError):
+    def __init__(self, partial: str, cause: Exception):
+        super().__init__("The model stream ended after partial output.")
+        self.partial = partial
+        self.cause = cause
+
+
 @dataclass(frozen=True)
 class AgentLoopResult:
     text: str
@@ -66,6 +80,8 @@ async def run_agent_loop(
     permissions: set[str] | None = None,
     max_steps: int = 8,
     tool_choice: str = "auto",
+    on_tool_event=None,
+    on_token=None,
 ) -> AgentLoopResult:
     """Call the model, run requested registered tools, and return its final answer."""
     schemas = registry.model_tools(permissions)
@@ -100,9 +116,14 @@ async def run_agent_loop(
     seen_calls: set[str] = set()
 
     for _ in range(max_steps):
-        response = await tool_model.ainvoke(working_messages)
+        response = await _invoke_model(tool_model, working_messages, on_token)
         _add_usage(usage, getattr(response, "usage_metadata", None))
+        finish_reason = _finish_reason(response)
         calls = list(getattr(response, "tool_calls", None) or [])
+        if _is_length_finish(finish_reason) and not calls:
+            raise AgentResponseIncompleteError(_message_text(response), finish_reason)
+        if getattr(response, "invalid_tool_calls", None):
+            raise RuntimeError("The model returned an incomplete tool call.")
         if not calls:
             text = _message_text(response)
             if not text:
@@ -122,12 +143,16 @@ async def run_agent_loop(
                     result = {"ok": False, "error": "That exact tool call was already attempted."}
                 else:
                     seen_calls.add(signature)
+                    if on_tool_event:
+                        await on_tool_event({"name": name, "state": "started"})
                     execution = await registry.execute(name, arguments, permissions=permissions)
                     result = {"ok": execution.ok}
                     if execution.ok:
                         result["data"] = execution.data
                     else:
                         result["error"] = execution.error
+                    if on_tool_event:
+                        await on_tool_event({"name": name, "state": "completed" if execution.ok else "failed"})
             used_steps.append(name)
             working_messages.append(ToolMessage(
                 content=json.dumps(result, ensure_ascii=False, default=str),
@@ -146,12 +171,64 @@ async def run_agent_loop(
 
     # Give the model one final chance to summarize the last tool results, with no
     # tools bound, so reaching the tool limit still produces a clean user answer.
-    final = await model.ainvoke(working_messages)
+    final = await _invoke_model(model, working_messages, on_token)
     _add_usage(usage, getattr(final, "usage_metadata", None))
     text = _message_text(final)
     if not text:
         raise RuntimeError("The model reached the tool step limit without a readable final answer.")
+    finish_reason = _finish_reason(final)
+    if _is_length_finish(finish_reason):
+        raise AgentResponseIncompleteError(text, finish_reason)
     return AgentLoopResult(text=text, tool_steps=tuple(used_steps), usage={k: v for k, v in usage.items() if v})
+
+
+def _finish_reason(message: Any) -> str | None:
+    for source in (getattr(message, "response_metadata", None), getattr(message, "generation_info", None), getattr(message, "additional_kwargs", None)):
+        if isinstance(source, dict):
+            for key in ("finish_reason", "finishReason", "stop_reason", "stopReason"):
+                if source.get(key) is not None:
+                    return str(source[key]).casefold()
+    return None
+
+
+def _is_length_finish(reason: str | None) -> bool:
+    return reason is not None and any(token in reason for token in ("max_tokens", "max token", "length", "token_limit", "token limit"))
+
+
+async def _invoke_model(model: Any, messages: list[Any], on_token=None):
+    stream = getattr(model, "astream", None)
+    if not callable(stream):
+        return await model.ainvoke(messages)
+    chunks = []
+    combined = None
+    try:
+        async for chunk in stream(messages):
+            chunks.append(chunk)
+            combined = chunk if combined is None else combined + chunk
+            if on_token:
+                text = _message_delta(chunk)
+                if text:
+                    await on_token(text)
+    except Exception as exc:
+        partial = "".join(_message_delta(chunk) for chunk in chunks)
+        if partial:
+            raise AgentResponseInterruptedError(partial, exc) from exc
+        raise
+    if combined is None:
+        return None
+    return combined
+
+
+def _message_delta(message: Any) -> str:
+    content = getattr(message, "content", "")
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            part["text"] for part in content
+            if isinstance(part, dict) and isinstance(part.get("text"), str)
+        )
+    return ""
 
 
 def _add_usage(target: dict[str, int], source: Any) -> None:

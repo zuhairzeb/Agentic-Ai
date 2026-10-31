@@ -23,6 +23,14 @@ def _provider_list(name: str, default: str) -> tuple[str, ...]:
     return tuple(item.strip().casefold() for item in values.split(",") if item.strip())
 
 
+def _max_output_tokens() -> int:
+    try:
+        value = int(os.getenv("LLM_MAX_OUTPUT_TOKENS", "8192"))
+    except ValueError:
+        value = 8192
+    return max(256, min(value, 32768))
+
+
 @dataclass(frozen=True)
 class Config:
     google_api_key: str | None = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY") or None
@@ -37,6 +45,7 @@ class Config:
     openrouter_model: str = os.getenv("OPENROUTER_MODEL", "openrouter/free")
     ollama_base_url: str | None = os.getenv("OLLAMA_BASE_URL") or None
     ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.2")
+    max_output_tokens: int = _max_output_tokens()
     free_only: bool = _env_bool("FREE_ONLY", False)
     gemini_free_tier_confirmed: bool = _env_bool("GEMINI_FREE_TIER_CONFIRMED")
     groq_free_tier_confirmed: bool = _env_bool("GROQ_FREE_TIER_CONFIRMED")
@@ -63,7 +72,7 @@ class Branding:
 
     name: str = os.getenv("APP_NAME") or os.getenv("APP_GREETING_NAME") or "Morrow"
     greeting_name: str | None = os.getenv("APP_GREETING_NAME") or None
-    tagline: str = os.getenv("APP_TAGLINE", "A workspace for clear answers and useful builds.")
+    tagline: str = os.getenv("APP_TAGLINE", "What are we working on?")
     logo: str | None = os.getenv("APP_LOGO") or None
     favicon: str | None = os.getenv("APP_FAVICON") or None
     description: str = os.getenv(

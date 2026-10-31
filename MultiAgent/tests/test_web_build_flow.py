@@ -76,7 +76,7 @@ class WebBuildFlowTests(unittest.TestCase):
                     try:
                         stream = asyncio.run(execute())
                         events = [json.loads(line[6:]) for line in stream.splitlines() if line.startswith("data: ")]
-                        done = next(event["value"] for event in events if event["type"] == "done")
+                        done = next(event["value"] for event in events if event["type"] == "completed")
                         self.assertTrue(model.required)
                         self.assertIn("create_artifact", model.asserted_tools)
                         self.assertEqual(done["agent_key"], "code")

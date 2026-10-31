@@ -187,7 +187,8 @@ Setting `FREE_ONLY=true` in your `.env` guarantees you will never incur API char
 1. **Safe Calculator:** Evaluates mathematical expressions using Python's Abstract Syntax Tree (`ast`), completely preventing arbitrary code execution.
 2. **Web Search (`web_search`):** Supports **DuckDuckGo** (zero keys required), **Serper**, and **Tavily**. Configurable as `Auto`, `Always`, or `Off`.
 3. **Safe Web Page Reader (`read_page`):** Fetches and cleans public HTTPS webpages. Rejects private IP ranges (anti-SSRF), protects against redirection loops, and strips malicious payload scripts.
-4. **Document Parser:** Extracts text on the fly from uploaded `.pdf`, `.txt`, and `.md` files (up to 10 MB).
+4. **Document Parser:** Extracts text from attached `.pdf`, `.txt`, `.md`, `.docx`, `.csv`, and `.xlsx` files (up to 10 MB). Scanned PDFs and image understanding are not configured; no visual diagnosis is performed.
+5. **Voice Transcription:** Records audio in the browser and sends it to Groq Whisper only after you stop recording. Urdu, English, mixed-language auto detection, and Roman Urdu prompting are available. Audio is processed by the configured Groq account and may incur usage charges; partial live text is not provided by the transcription endpoint.
 
 ---
 
